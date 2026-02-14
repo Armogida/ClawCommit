@@ -1,0 +1,21 @@
+{
+  "projectName": "<Your Project Name>",
+  "network": "BSC Testnet",
+  "contracts": [
+    {
+      "name": "ExampleToken",
+      "address": "0x123...",
+      "explorerLink": "https://testnet.bscscan.com/address/...",
+      "description": "Governance token"
+    },
+    {
+      "name": "ExampleVault",
+      "address": "0xabc...",
+      "explorerLink": "https://testnet.bscscan.com/address/...",
+      "description": "Staking vault"
+    }
+  ],
+  "frontendUrl": "https://...",
+  "backendApi": "https://...",
+  "notes": "Any special instructions for interacting with the contracts."
+}
