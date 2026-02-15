@@ -166,7 +166,53 @@ Required env vars:
 - `DEPLOYER_PRIVATE_KEY`
 - `BSCSCAN_API_KEY`
 
-## 7. Merkle Batching (Wave 2)
+## 7. OpenClaw Native Profile
+
+OpenClaw Native is an additive profile that maps CI validation outcomes into deterministic ClawCommit decisions.
+
+### OpenClaw payload model
+
+Input:
+- `modelVersion`
+- `context` (`workflow`, `repository`, optional `ref`, `sha`, `actor`, `runId`, `runUrl`)
+- `validations[]` (`name`, `passed`, optional `required`, optional `details`)
+
+Deterministic rules:
+- Sort validations by `name` before prompt construction.
+- Render prompt with fixed template version `openclaw-prompt-v1`.
+- Output mapping:
+  - `OPENCLAW_APPROVE` when all required validations pass.
+  - `OPENCLAW_REJECT` when any required validation fails.
+
+### OpenClaw integration surfaces
+
+- SDK:
+  - `buildOpenClawDecisionPayload`
+  - `commitOpenClawDecision`
+  - `revealOpenClawDecision`
+- MCP tools:
+  - `clawcommit_openclaw_build_payload`
+  - `clawcommit_openclaw_commit`
+  - `clawcommit_openclaw_reveal`
+- AI schemas:
+  - OpenAI, Anthropic, Gemini tool definitions with the same shape
+- GitHub workflows:
+  - `.github/workflows/openclaw-pr-commit.yml`
+  - `.github/workflows/openclaw-merge-reveal.yml`
+
+### OpenClaw artifact contract
+
+- `.clawcommit/openclaw/pr-<PR_NUMBER>-latest.json`:
+  full prompt/output/modelVersion/nonce + validation metadata + commit tx/hash
+- `.clawcommit/openclaw/pr-<PR_NUMBER>-revealed.json`:
+  reveal tx + verify status + replay result
+
+Security defaults:
+- testnet write default (`bscTestnet`)
+- redacted PR comments
+- explicit mainnet opt-in only
+
+## 8. Merkle Batching (Wave 2)
 
 Wave 2 keeps Wave 1 root commitments and adds multi-leaf reveal writes in one transaction.
 

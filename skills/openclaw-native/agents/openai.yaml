@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenClaw Native"
+  short_description: "Run OpenClaw-native ClawCommit PR and merge workflows"
+  default_prompt: "Set up and operate OpenClaw Native in this repo: deterministic payload build, commit/reveal automation, artifact persistence, replay verification, and PR link posting."

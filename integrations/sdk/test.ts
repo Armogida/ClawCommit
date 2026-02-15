@@ -7,7 +7,14 @@
 
 import assert from "assert";
 import { ethers } from "ethers";
-import { ClawCommit, DecisionPayload } from "./src/index";
+import {
+  buildOpenClawDecisionPayload,
+  ClawCommit,
+  commitOpenClawDecision,
+  DecisionPayload,
+  OpenClawDecisionInput,
+  revealOpenClawDecision,
+} from "./src/index";
 
 const FALLBACK_ADDRESS = "0x0000000000000000000000000000000000000001";
 const config = {
@@ -25,6 +32,26 @@ function samplePayload(suffix = ""): DecisionPayload {
     prompt: `Should we execute policy${suffix}?`,
     output: `APPROVE_POLICY${suffix}`,
     modelVersion: "clawcommit-sdk-test-v2",
+  };
+}
+
+function sampleOpenClawInput(): OpenClawDecisionInput {
+  return {
+    modelVersion: "openclaw-agent-v1",
+    context: {
+      workflow: "openclaw-pr-validation",
+      repository: "Armogida/ClawCommit",
+      ref: "refs/pull/42/head",
+      sha: "abc123",
+      actor: "ci-bot",
+      runId: "777",
+      runUrl: "https://github.com/Armogida/ClawCommit/actions/runs/777",
+    },
+    validations: [
+      { name: "unit-tests", required: true, passed: true, details: "146 passing" },
+      { name: "lint", required: false, passed: false, details: "warning only" },
+      { name: "compile", required: true, passed: true, details: "ok" },
+    ],
   };
 }
 
@@ -50,6 +77,100 @@ async function testStaticMethods() {
   const { hash: hash2 } = ClawCommit.computeDecisionHash(payload, nonce);
   console.log("\nHash is deterministic:", hash === hash2);
   assert.strictEqual(hash, hash2, "computeDecisionHash must be deterministic for same nonce");
+}
+
+async function testOpenClawPayloadBuilder() {
+  console.log("\n=== Testing OpenClaw Payload Builder ===\n");
+
+  const inputA = sampleOpenClawInput();
+  const inputB = {
+    ...sampleOpenClawInput(),
+    validations: [...sampleOpenClawInput().validations].reverse(),
+  };
+
+  const payloadA = buildOpenClawDecisionPayload(inputA);
+  const payloadB = buildOpenClawDecisionPayload(inputB);
+
+  assert.strictEqual(payloadA.prompt, payloadB.prompt, "prompt should be deterministic");
+  assert.strictEqual(payloadA.output, "OPENCLAW_APPROVE");
+  assert.strictEqual(payloadA.promptDigest, payloadB.promptDigest, "digest should be deterministic");
+  assert.strictEqual(payloadA.validations[0].name, "compile");
+  assert.strictEqual(payloadA.validations[1].name, "lint");
+  assert.strictEqual(payloadA.validations[2].name, "unit-tests");
+  assert.strictEqual(payloadA.requiredValidationCount, 2);
+  assert.strictEqual(payloadA.requiredFailureCount, 0);
+
+  const rejectInput: OpenClawDecisionInput = {
+    ...sampleOpenClawInput(),
+    validations: [
+      { name: "compile", required: true, passed: false, details: "failed" },
+      { name: "unit-tests", required: true, passed: true, details: "ok" },
+    ],
+  };
+  const rejectPayload = buildOpenClawDecisionPayload(rejectInput);
+  assert.strictEqual(rejectPayload.output, "OPENCLAW_REJECT");
+  assert.strictEqual(rejectPayload.requiredFailureCount, 1);
+
+  const hashA = ClawCommit.computeDecisionHash(payloadA, "0x" + "33".repeat(32));
+  const hashB = ClawCommit.computeDecisionHash(payloadB, "0x" + "33".repeat(32));
+  assert.strictEqual(hashA.hash, hashB.hash, "hash must remain stable for deterministic prompt");
+}
+
+async function testOpenClawHelpers() {
+  console.log("\n=== Testing OpenClaw SDK Helpers ===\n");
+
+  const payload = buildOpenClawDecisionPayload(sampleOpenClawInput());
+  const fakeClaw = {
+    async commit(
+      commitPayload: DecisionPayload,
+      nonce?: string
+    ): Promise<{
+      commitId: string;
+      hash: string;
+      nonce: string;
+      txHash: string;
+      explorerUrl: string;
+      prompt: string;
+      output: string;
+      modelVersion: string;
+    }> {
+      return {
+        commitId: "11",
+        hash: "0x" + "44".repeat(32),
+        nonce: nonce || "0x" + "55".repeat(32),
+        txHash: "0x" + "66".repeat(32),
+        explorerUrl: "https://testnet.bscscan.com/tx/mock",
+        prompt: commitPayload.prompt,
+        output: commitPayload.output,
+        modelVersion: commitPayload.modelVersion,
+      };
+    },
+    async reveal(): Promise<{
+      commitId: string;
+      txHash: string;
+      verified: boolean;
+      explorerUrl: string;
+    }> {
+      return {
+        commitId: "11",
+        txHash: "0x" + "77".repeat(32),
+        verified: true,
+        explorerUrl: "https://testnet.bscscan.com/tx/mock-reveal",
+      };
+    },
+  } as unknown as ClawCommit;
+
+  const commit = await commitOpenClawDecision(fakeClaw, sampleOpenClawInput(), "0x" + "88".repeat(32));
+  assert.strictEqual(commit.output, payload.output);
+  assert.strictEqual(commit.modelVersion, payload.modelVersion);
+
+  const reveal = await revealOpenClawDecision(
+    fakeClaw,
+    commit.commitId,
+    payload,
+    "0x" + "88".repeat(32)
+  );
+  assert.strictEqual(reveal.verified, true);
 }
 
 async function testConstructorValidation() {
@@ -213,6 +334,8 @@ async function runAllTests() {
   console.log("Private Key:", config.privateKey ? "Provided" : "Not provided (read-only mode)");
 
   await testStaticMethods();
+  await testOpenClawPayloadBuilder();
+  await testOpenClawHelpers();
   await testConstructorValidation();
   await testBigIntSafety();
   await testReadOnlyMode();

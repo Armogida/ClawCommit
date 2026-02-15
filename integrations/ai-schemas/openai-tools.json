@@ -195,5 +195,152 @@
         "required": ["commit_id", "contract_address"]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "clawcommit_openclaw_build_payload",
+      "description": "Build deterministic OpenClaw prompt/output payload from CI validation metadata.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "model_version": {
+            "type": "string",
+            "description": "Model version for the OpenClaw decision."
+          },
+          "context": {
+            "type": "object",
+            "description": "OpenClaw workflow context.",
+            "properties": {
+              "workflow": { "type": "string" },
+              "repository": { "type": "string" },
+              "ref": { "type": "string" },
+              "sha": { "type": "string" },
+              "actor": { "type": "string" },
+              "runId": { "type": "string" },
+              "runUrl": { "type": "string" }
+            },
+            "required": ["workflow", "repository"]
+          },
+          "validations": {
+            "type": "array",
+            "description": "Validation results list.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "passed": { "type": "boolean" },
+                "required": { "type": "boolean" },
+                "details": { "type": "string" }
+              },
+              "required": ["name", "passed"]
+            }
+          },
+          "log_sensitive": {
+            "type": "boolean",
+            "description": "Set true to include full prompt in responses."
+          }
+        },
+        "required": ["model_version", "context", "validations"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "clawcommit_openclaw_commit",
+      "description": "Build deterministic OpenClaw payload and commit it on-chain.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "model_version": { "type": "string" },
+          "context": {
+            "type": "object",
+            "properties": {
+              "workflow": { "type": "string" },
+              "repository": { "type": "string" },
+              "ref": { "type": "string" },
+              "sha": { "type": "string" },
+              "actor": { "type": "string" },
+              "runId": { "type": "string" },
+              "runUrl": { "type": "string" }
+            },
+            "required": ["workflow", "repository"]
+          },
+          "validations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "passed": { "type": "boolean" },
+                "required": { "type": "boolean" },
+                "details": { "type": "string" }
+              },
+              "required": ["name", "passed"]
+            }
+          },
+          "nonce": { "type": "string" },
+          "contract_address": { "type": "string" },
+          "network": { "type": "string", "enum": ["bscMainnet", "bscTestnet"] },
+          "allow_mainnet_writes": { "type": "boolean" },
+          "log_sensitive": { "type": "boolean" }
+        },
+        "required": ["model_version", "context", "validations", "contract_address"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "clawcommit_openclaw_reveal",
+      "description": "Build deterministic OpenClaw payload and reveal an existing commitment.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "commit_id": { "type": "integer" },
+          "model_version": { "type": "string" },
+          "context": {
+            "type": "object",
+            "properties": {
+              "workflow": { "type": "string" },
+              "repository": { "type": "string" },
+              "ref": { "type": "string" },
+              "sha": { "type": "string" },
+              "actor": { "type": "string" },
+              "runId": { "type": "string" },
+              "runUrl": { "type": "string" }
+            },
+            "required": ["workflow", "repository"]
+          },
+          "validations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "passed": { "type": "boolean" },
+                "required": { "type": "boolean" },
+                "details": { "type": "string" }
+              },
+              "required": ["name", "passed"]
+            }
+          },
+          "nonce": { "type": "string" },
+          "contract_address": { "type": "string" },
+          "network": { "type": "string", "enum": ["bscMainnet", "bscTestnet"] },
+          "allow_mainnet_writes": { "type": "boolean" },
+          "log_sensitive": { "type": "boolean" }
+        },
+        "required": [
+          "commit_id",
+          "model_version",
+          "context",
+          "validations",
+          "nonce",
+          "contract_address"
+        ]
+      }
+    }
   }
 ]

@@ -261,6 +261,32 @@ node scripts/integration/post-cycle-links.js \
 - `--post-gh-pr <PR_NUMBER>` (optional)
 - `--gh-repo <OWNER/REPO>` (optional)
 
+## OpenClaw Native (PR + Merge Tracking)
+
+OpenClaw Native is an additive profile that keeps existing `clawcommit_*` APIs intact while adding deterministic PR-validation payload tooling and CI workflows.
+
+What is added:
+- SDK helpers: `buildOpenClawDecisionPayload`, `commitOpenClawDecision`, `revealOpenClawDecision`
+- MCP tools: `clawcommit_openclaw_build_payload`, `clawcommit_openclaw_commit`, `clawcommit_openclaw_reveal`
+- AI schemas for OpenAI/Anthropic/Gemini with matching OpenClaw tool definitions
+- GitHub workflows:
+  - `.github/workflows/openclaw-pr-commit.yml`
+  - `.github/workflows/openclaw-merge-reveal.yml`
+
+Required repo secrets:
+- `CLAWCOMMIT_CONTRACT`
+- `DEPLOYER_PRIVATE_KEY`
+- `E2E_TESTNET_RPC_URL` or `BSC_TESTNET_RPC_URL`
+
+Artifact contract:
+- `.clawcommit/openclaw/pr-<PR_NUMBER>-latest.json` (full prompt/output/nonce + validation metadata)
+- `.clawcommit/openclaw/pr-<PR_NUMBER>-revealed.json` (includes reveal tx + verify status)
+
+Safety defaults:
+- Writes default to `bscTestnet`.
+- Mainnet writes remain blocked unless explicitly enabled.
+- PR comments are redacted; full payload remains artifact-only.
+
 ### 4. Replay Validator (Standalone)
 
 ```bash

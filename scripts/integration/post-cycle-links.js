@@ -115,6 +115,10 @@ function buildMarkdown({ artifactPath, artifact, title }) {
   const deployTx = artifact.deployTx || artifact.deploymentTx || "";
   const commitTx = artifact.commitTx || "";
   const revealTx = artifact.revealTx || "";
+  const output = artifact.output || artifact.decision || "n/a";
+  const modelVersion = artifact.modelVersion || "n/a";
+  const promptDigest = artifact.promptDigest || "n/a";
+  const validationSummary = buildValidationSummary(artifact);
 
   const lines = [
     `## ${title}`,
@@ -132,11 +136,40 @@ function buildMarkdown({ artifactPath, artifact, title }) {
     `- Contract: ${artifact.contract || "n/a"}`,
     `- Contract Explorer: ${addressLink(explorerBase, artifact.contract)}`,
     `- Commit ID: ${artifact.commitId || "n/a"}`,
+    `- Decision: ${output}`,
+    `- Model Version: ${modelVersion}`,
+    `- Prompt Digest: ${promptDigest}`,
+    `- Validation Summary: ${validationSummary}`,
     `- On-chain verify: ${artifact.onchainVerify || "n/a"}`,
     `- Replay: ${artifact.replay || "n/a"}`,
   ];
 
   return `${lines.join("\n")}\n`;
+}
+
+function buildValidationSummary(artifact) {
+  if (typeof artifact.validationSummary === "string" && artifact.validationSummary.trim()) {
+    return artifact.validationSummary.trim();
+  }
+
+  if (!Array.isArray(artifact.validations) || artifact.validations.length === 0) {
+    return "n/a";
+  }
+
+  const normalized = artifact.validations.map((entry) => ({
+    name: String(entry.name || "").trim() || "unnamed",
+    required: entry.required !== false,
+    passed: Boolean(entry.passed),
+  }));
+  const required = normalized.filter((entry) => entry.required);
+  const requiredFailures = required.filter((entry) => !entry.passed);
+  const failedNames = requiredFailures.slice(0, 5).map((entry) => entry.name);
+  const suffix =
+    requiredFailures.length > failedNames.length
+      ? ` (+${requiredFailures.length - failedNames.length} more)`
+      : "";
+
+  return `required_failed=${requiredFailures.length}/${required.length}; total=${normalized.length}; failed=[${failedNames.join(", ")}]${suffix}`;
 }
 
 function writeOut(filePath, markdown) {

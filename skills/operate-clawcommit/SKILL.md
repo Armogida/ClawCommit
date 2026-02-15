@@ -1,6 +1,6 @@
 ---
 name: operate-clawcommit
-description: Operate ClawCommit workflows in this repository, including contract deployment, commit/reveal execution, deterministic replay verification, Merkle batch commitments, and integration setup for MCP/SDK/GitHub Actions. Use when requests involve scripts under scripts/ or scripts/batch/, deployment-proof artifacts, V2 hash validation, or ClawCommit integration wiring.
+description: Operate ClawCommit workflows in this repository, including contract deployment, commit/reveal execution, deterministic replay verification, Merkle batch commitments, OpenClaw Native PR/merge tracking, and integration setup for MCP/SDK/GitHub Actions. Use when requests involve scripts under scripts/ or scripts/batch/, deployment-proof artifacts, OpenClaw artifacts/workflows, V2 hash validation, or ClawCommit integration wiring.
 ---
 
 # Operate ClawCommit
@@ -24,6 +24,7 @@ Execute ClawCommit protocol operations with the repository's canonical commands 
 - Core commit/reveal/replay/deploy: `references/core-workflow.md`
 - Merkle batch flow: `references/batch-workflow.md`
 - MCP/SDK/GitHub Action integration: `references/integrations-workflow.md`
+- OpenClaw workflow: `skills/openclaw-native/references/workflow.md`
 
 ## Operating Rules
 
@@ -65,6 +66,9 @@ bash <skill-dir>/scripts/decision_cycle.sh \
   --network bsc \
   --json-out deployment-proof/decision-cycle-summary.json
 ```
+
+Supports explicit mainnet opt-in for both commit and reveal:
+- `--allow-mainnet-writes true`
 
 - `scripts/batch_local_cycle.sh`
 Run build -> recomputeRoot -> generateProof -> replayBatch --local and optionally write summary JSON.

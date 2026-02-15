@@ -60,6 +60,47 @@ const proof = await claw.verify(commit.commitId);
 console.log(proof.verified);
 ```
 
+## OpenClaw Native Helpers
+
+OpenClaw helpers build a deterministic payload from CI validation metadata,
+then commit/reveal using the existing `ClawCommit` client.
+
+```ts
+import {
+  ClawCommit,
+  buildOpenClawDecisionPayload,
+  commitOpenClawDecision,
+  revealOpenClawDecision
+} from "@clawcommit/sdk";
+
+const input = {
+  modelVersion: "openclaw-agent-v1",
+  context: {
+    workflow: "openclaw-pr-validation",
+    repository: "owner/repo",
+    ref: "refs/pull/42/head",
+    sha: "abc123"
+  },
+  validations: [
+    { name: "compile", required: true, passed: true, details: "ok" },
+    { name: "unit-tests", required: true, passed: true, details: "146 passing" }
+  ]
+};
+
+const payload = buildOpenClawDecisionPayload(input);
+// payload.output => OPENCLAW_APPROVE | OPENCLAW_REJECT
+// payload.promptTemplateVersion => openclaw-prompt-v1
+// payload.promptDigest => keccak256(prompt)
+
+const commit = await commitOpenClawDecision(claw, input);
+await revealOpenClawDecision(claw, commit.commitId, payload, commit.nonce);
+```
+
+Deterministic guarantees:
+- validations are sorted by `name` before prompt construction
+- prompt template is fixed and versioned
+- output is `OPENCLAW_REJECT` if any required validation fails, else `OPENCLAW_APPROVE`
+
 ## Static Hash Utility
 ```ts
 const { hash, nonce } = ClawCommit.computeDecisionHash(payload);

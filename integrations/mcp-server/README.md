@@ -14,6 +14,9 @@ MCP server for ClawCommit v2 commit-reveal flows on BNB Chain.
 - `clawcommit_verify`
 - `clawcommit_get_commitment`
 - `clawcommit_compute_hash`
+- `clawcommit_openclaw_build_payload`
+- `clawcommit_openclaw_commit`
+- `clawcommit_openclaw_reveal`
 
 ## Hash Model
 All tools use:
@@ -78,6 +81,48 @@ Required:
 Optional:
 - `network` (defaults to `bscTestnet`)
 - `log_sensitive` (defaults to `false`)
+
+### `clawcommit_openclaw_build_payload`
+Required:
+- `model_version`
+- `context` (workflow/repository + optional ref/sha/actor/runId/runUrl)
+- `validations` (array of `{ name, passed, required?, details? }`)
+
+Optional:
+- `log_sensitive` (defaults to `false`)
+
+Returns deterministic OpenClaw prompt/output plus `promptDigest`.
+
+### `clawcommit_openclaw_commit`
+Required:
+- `model_version`
+- `context`
+- `validations`
+- `contract_address`
+
+Optional:
+- `nonce` (required if `log_sensitive=false`)
+- `network` (`bscMainnet` | `bscTestnet`, defaults to `bscTestnet`)
+- `allow_mainnet_writes` (defaults to `false`)
+- `log_sensitive` (defaults to `false`)
+
+Builds deterministic OpenClaw payload and commits it on-chain.
+
+### `clawcommit_openclaw_reveal`
+Required:
+- `commit_id`
+- `model_version`
+- `context`
+- `validations`
+- `nonce`
+- `contract_address`
+
+Optional:
+- `network` (defaults to `bscTestnet`)
+- `allow_mainnet_writes` (defaults to `false`)
+- `log_sensitive` (defaults to `false`)
+
+Builds deterministic OpenClaw payload and reveals the matching commitment.
 
 ## Environment
 Set in `.env`:

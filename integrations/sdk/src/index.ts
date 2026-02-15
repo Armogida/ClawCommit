@@ -43,6 +43,45 @@ export interface VerifyResult extends DecisionPayload {
 
 export type CommitIdInput = bigint | number | string;
 
+export interface OpenClawValidationResult {
+  name: string;
+  passed: boolean;
+  required?: boolean;
+  details?: string;
+}
+
+export interface OpenClawNormalizedValidationResult {
+  name: string;
+  passed: boolean;
+  required: boolean;
+  details: string;
+}
+
+export interface OpenClawBuildContext {
+  workflow: string;
+  repository: string;
+  ref?: string;
+  sha?: string;
+  actor?: string;
+  runId?: string;
+  runUrl?: string;
+}
+
+export interface OpenClawDecisionInput {
+  modelVersion: string;
+  context: OpenClawBuildContext;
+  validations: OpenClawValidationResult[];
+}
+
+export interface OpenClawDecisionPayload extends DecisionPayload {
+  promptTemplateVersion: string;
+  promptDigest: string;
+  context: OpenClawBuildContext;
+  validations: OpenClawNormalizedValidationResult[];
+  requiredValidationCount: number;
+  requiredFailureCount: number;
+}
+
 const CLAWCOMMIT_ABI = [
   "function commitDecision(bytes32 _hash) external returns (uint256 commitId)",
   "function revealDecision(uint256 _commitId, string calldata _prompt, string calldata _output, string calldata _modelVersion, string calldata _nonce) external",
@@ -65,6 +104,123 @@ const EXPLORER_URLS = {
   mainnet: "https://bscscan.com",
   testnet: "https://testnet.bscscan.com",
 };
+
+export const OPENCLAW_PROMPT_TEMPLATE_VERSION = "openclaw-prompt-v1";
+
+function requireNonEmptyText(value: string, label: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return normalized;
+}
+
+function normalizeOpenClawValidationDetails(details?: string): string {
+  if (!details) {
+    return "";
+  }
+  return details.trim().replace(/\r?\n/g, "\\n");
+}
+
+function normalizeOpenClawValidation(
+  validation: OpenClawValidationResult,
+  index: number
+): OpenClawNormalizedValidationResult {
+  return {
+    name: requireNonEmptyText(validation.name, `validations[${index}].name`),
+    passed: Boolean(validation.passed),
+    required: validation.required ?? true,
+    details: normalizeOpenClawValidationDetails(validation.details),
+  };
+}
+
+function sortOpenClawValidations(
+  validations: OpenClawNormalizedValidationResult[]
+): OpenClawNormalizedValidationResult[] {
+  return [...validations].sort((a, b) => {
+    if (a.name < b.name) return -1;
+    if (a.name > b.name) return 1;
+    if (a.required !== b.required) return a.required ? -1 : 1;
+    if (a.passed !== b.passed) return a.passed ? 1 : -1;
+    if (a.details < b.details) return -1;
+    if (a.details > b.details) return 1;
+    return 0;
+  });
+}
+
+function normalizeOpenClawContext(context: OpenClawBuildContext): OpenClawBuildContext {
+  return {
+    workflow: requireNonEmptyText(context.workflow, "context.workflow"),
+    repository: requireNonEmptyText(context.repository, "context.repository"),
+    ref: context.ref?.trim() || "",
+    sha: context.sha?.trim() || "",
+    actor: context.actor?.trim() || "",
+    runId: context.runId?.trim() || "",
+    runUrl: context.runUrl?.trim() || "",
+  };
+}
+
+export function buildOpenClawDecisionPayload(
+  input: OpenClawDecisionInput
+): OpenClawDecisionPayload {
+  const modelVersion = requireNonEmptyText(input.modelVersion, "modelVersion");
+  if (!Array.isArray(input.validations) || input.validations.length === 0) {
+    throw new Error("validations must include at least one entry");
+  }
+
+  const normalizedContext = normalizeOpenClawContext(input.context);
+  const normalizedValidations = input.validations.map((entry, index) =>
+    normalizeOpenClawValidation(entry, index)
+  );
+  const sortedValidations = sortOpenClawValidations(normalizedValidations);
+
+  const uniqueNames = new Set<string>();
+  for (const validation of sortedValidations) {
+    if (uniqueNames.has(validation.name)) {
+      throw new Error(`validations contains duplicate name: ${validation.name}`);
+    }
+    uniqueNames.add(validation.name);
+  }
+
+  const requiredValidationCount = sortedValidations.filter((entry) => entry.required).length;
+  const requiredFailureCount = sortedValidations.filter(
+    (entry) => entry.required && !entry.passed
+  ).length;
+  const decision = requiredFailureCount > 0 ? "OPENCLAW_REJECT" : "OPENCLAW_APPROVE";
+
+  const promptLines = [
+    `openclaw.template=${OPENCLAW_PROMPT_TEMPLATE_VERSION}`,
+    `openclaw.workflow=${normalizedContext.workflow}`,
+    `openclaw.repository=${normalizedContext.repository}`,
+    `openclaw.ref=${normalizedContext.ref || ""}`,
+    `openclaw.sha=${normalizedContext.sha || ""}`,
+    `openclaw.actor=${normalizedContext.actor || ""}`,
+    `openclaw.run_id=${normalizedContext.runId || ""}`,
+    `openclaw.run_url=${normalizedContext.runUrl || ""}`,
+    `openclaw.required_validation_count=${requiredValidationCount}`,
+    `openclaw.required_failure_count=${requiredFailureCount}`,
+    `openclaw.validation_count=${sortedValidations.length}`,
+    ...sortedValidations.map(
+      (entry, index) =>
+        `openclaw.validation.${index}=name:${entry.name}|required:${entry.required ? "1" : "0"}|passed:${entry.passed ? "1" : "0"}|details:${entry.details}`
+    ),
+  ];
+
+  const prompt = promptLines.join("\n");
+  const promptDigest = ethers.keccak256(ethers.toUtf8Bytes(prompt));
+
+  return {
+    prompt,
+    output: decision,
+    modelVersion,
+    promptTemplateVersion: OPENCLAW_PROMPT_TEMPLATE_VERSION,
+    promptDigest,
+    context: normalizedContext,
+    validations: sortedValidations,
+    requiredValidationCount,
+    requiredFailureCount,
+  };
+}
 
 function normalizeNonce(nonce: string): string {
   const normalized = nonce.trim();
@@ -354,6 +510,24 @@ export class ClawCommit {
   isReadOnly(): boolean {
     return !this.signer;
   }
+}
+
+export async function commitOpenClawDecision(
+  claw: ClawCommit,
+  input: OpenClawDecisionInput,
+  nonce?: string
+): Promise<CommitResult> {
+  const payload = buildOpenClawDecisionPayload(input);
+  return claw.commit(payload, nonce);
+}
+
+export async function revealOpenClawDecision(
+  claw: ClawCommit,
+  commitId: CommitIdInput,
+  payload: OpenClawDecisionPayload,
+  nonce: string
+): Promise<RevealResult> {
+  return claw.reveal(commitId, payload, nonce);
 }
 
 export default ClawCommit;

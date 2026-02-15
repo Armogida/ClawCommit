@@ -8,6 +8,19 @@ This directory contains integrations that make ClawCommit accessible to AI agent
 
 ## Available Integrations
 
+### OpenClaw Native Profile
+
+OpenClaw Native is a local additive profile that layers deterministic PR validation payloads on top of existing ClawCommit APIs.
+
+It adds:
+- OpenClaw helpers in SDK
+- OpenClaw tools in MCP
+- OpenClaw function schemas (OpenAI/Anthropic/Gemini)
+- PR/merge workflows that commit/reveal decisions and post explorer URLs
+
+Backwards compatibility:
+- Existing `clawcommit_*` APIs and workflows remain unchanged.
+
 ### 1. GitHub Copilot (`github-copilot/`)
 
 **Purpose**: Use ClawCommit directly from GitHub Copilot to create tamper-evident logs during AI-assisted development.
@@ -43,7 +56,7 @@ npm run mcp:setup
 **Use Case**: Claude Code, Cursor, or other MCP-compatible AI tools can commit, reveal, and verify decisions directly on BNB Chain without manual intervention.
 
 **Key Features**:
-- 4 MCP tools: commit, reveal, verify, compute_hash
+- 8 MCP tools including OpenClaw payload/commit/reveal helpers
 - Automatic nonce generation
 - Support for BSC Mainnet and Testnet
 - Zero configuration needed beyond private key
@@ -86,6 +99,10 @@ npm run mcp:test
 
 **Documentation**: [github-action/README.md](./github-action/README.md)
 
+OpenClaw workflows built on top of this action:
+- `../.github/workflows/openclaw-pr-commit.yml`
+- `../.github/workflows/openclaw-merge-reveal.yml`
+
 ---
 
 ### 4. TypeScript SDK (`sdk/`)
@@ -99,6 +116,7 @@ npm run mcp:test
 - High-level API abstracting blockchain complexity
 - Support for multiple networks
 - Built-in retry and error handling
+- OpenClaw deterministic payload builder and commit/reveal wrappers
 
 **Quick Start**:
 ```typescript
@@ -135,6 +153,7 @@ await client.reveal(Number(commitId), payload, nonce);
 - Anthropic tool use definitions
 - JSON Schema validation
 - Example prompts and responses
+- OpenClaw-specific tool definitions aligned with SDK/MCP behavior
 
 **Quick Start**:
 ```json

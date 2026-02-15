@@ -6,6 +6,7 @@ usage() {
 Usage:
   decision_cycle.sh --contract <ADDR> --prompt <PROMPT> --output <OUTPUT> --model-version <VERSION>
                     [--nonce <NONCE>] [--network <NETWORK>] [--rpc <RPC_URL>]
+                    [--allow-mainnet-writes <true|false>]
                     [--repo <PATH>] [--skip-replay] [--json-out <PATH>]
                     [--deploy-tx <TX_HASH>] [--links-out <PATH>]
                     [--post-gh-pr <PR_NUMBER>] [--gh-repo <OWNER/REPO>]
@@ -21,6 +22,7 @@ output=""
 model_version=""
 nonce=""
 rpc_url=""
+allow_mainnet_writes="false"
 skip_replay="false"
 json_out=""
 deploy_tx=""
@@ -39,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     --model-version) model_version="$2"; shift 2 ;;
     --nonce) nonce="$2"; shift 2 ;;
     --rpc) rpc_url="$2"; shift 2 ;;
+    --allow-mainnet-writes) allow_mainnet_writes="$2"; shift 2 ;;
     --skip-replay) skip_replay="true"; shift ;;
     --json-out) json_out="$2"; shift 2 ;;
     --deploy-tx) deploy_tx="$2"; shift 2 ;;
@@ -119,6 +122,7 @@ commit_cmd=(
   --output "$output"
   --model-version "$model_version"
   --nonce "$nonce"
+  --allow-mainnet-writes "$allow_mainnet_writes"
 )
 
 echo "[decision-cycle] committing decision"
@@ -140,6 +144,7 @@ reveal_cmd=(
   --output "$output"
   --model-version "$model_version"
   --nonce "$nonce"
+  --allow-mainnet-writes "$allow_mainnet_writes"
 )
 
 echo "[decision-cycle] revealing commit_id=$commit_id"

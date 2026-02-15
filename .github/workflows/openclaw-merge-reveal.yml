@@ -1,0 +1,196 @@
+name: OpenClaw Merge Reveal
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  openclaw-merge-reveal:
+    if: ${{ github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Resolve testnet RPC URL
+        id: rpc
+        shell: bash
+        run: |
+          RPC_URL="${{ secrets.E2E_TESTNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="${{ secrets.BSC_TESTNET_RPC_URL }}"
+          fi
+          if [ -z "$RPC_URL" ]; then
+            echo "Missing E2E_TESTNET_RPC_URL or BSC_TESTNET_RPC_URL secret" >&2
+            exit 1
+          fi
+          echo "rpc_url=$RPC_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.CLAWCOMMIT_CONTRACT }}" ]; then
+            echo "Missing CLAWCOMMIT_CONTRACT secret" >&2
+            exit 1
+          fi
+          if [ -z "${{ secrets.DEPLOYER_PRIVATE_KEY }}" ]; then
+            echo "Missing DEPLOYER_PRIVATE_KEY secret" >&2
+            exit 1
+          fi
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install GitHub Action dependencies
+        run: npm ci --prefix integrations/github-action
+
+      - name: Fetch latest PR artifact
+        id: fetch_artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p .clawcommit/openclaw
+          FETCH_OUTPUT="$(node scripts/integration/fetch-pr-artifact.js \
+            --repo "${{ github.repository }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --name "clawcommit-openclaw-pr-${{ github.event.pull_request.number }}-latest" \
+            --out-dir .clawcommit/openclaw)"
+          echo "$FETCH_OUTPUT"
+
+          ARTIFACT_FILE="$(echo "$FETCH_OUTPUT" | awk -F= '/FOUND_ARTIFACT_FILE=/{print $2}' | tail -n1)"
+          if [ -z "$ARTIFACT_FILE" ]; then
+            echo "Could not find downloaded OpenClaw artifact JSON for PR ${{ github.event.pull_request.number }}" >&2
+            exit 1
+          fi
+
+          echo "artifact_file=$ARTIFACT_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Load artifact payload
+        id: artifact_meta
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const artifactPath = process.env.ARTIFACT_FILE;
+          const outPath = process.env.GITHUB_OUTPUT;
+          const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+
+          if (!artifact.commitId || !artifact.prompt || !artifact.output || !artifact.modelVersion || !artifact.nonce) {
+            throw new Error("Artifact is missing commit/reveal fields (commitId/prompt/output/modelVersion/nonce)");
+          }
+
+          fs.appendFileSync(outPath, `commit_id=${artifact.commitId}\n`);
+          fs.appendFileSync(outPath, `contract=${artifact.contract || process.env.DEFAULT_CONTRACT}\n`);
+          fs.appendFileSync(outPath, `network=${artifact.network || "bscTestnet"}\n`);
+          fs.appendFileSync(outPath, `model_version=${artifact.modelVersion}\n`);
+          fs.appendFileSync(outPath, `prompt_digest=${artifact.promptDigest || ""}\n`);
+          fs.appendFileSync(outPath, `validation_summary=${artifact.validationSummary || ""}\n`);
+          fs.appendFileSync(outPath, `prompt<<EOF\n${artifact.prompt}\nEOF\n`);
+          fs.appendFileSync(outPath, `output<<EOF\n${artifact.output}\nEOF\n`);
+          fs.appendFileSync(outPath, `nonce=${artifact.nonce}\n`);
+          NODE
+        env:
+          ARTIFACT_FILE: ${{ steps.fetch_artifact.outputs.artifact_file }}
+          DEFAULT_CONTRACT: ${{ secrets.CLAWCOMMIT_CONTRACT }}
+
+      - name: Reveal OpenClaw decision onchain (testnet)
+        id: openclaw_reveal
+        uses: ./integrations/github-action
+        with:
+          action: reveal
+          commit-id: ${{ steps.artifact_meta.outputs.commit_id }}
+          prompt: ${{ steps.artifact_meta.outputs.prompt }}
+          output: ${{ steps.artifact_meta.outputs.output }}
+          model-version: ${{ steps.artifact_meta.outputs.model_version }}
+          nonce: ${{ steps.artifact_meta.outputs.nonce }}
+          contract-address: ${{ steps.artifact_meta.outputs.contract }}
+          rpc-url: ${{ steps.rpc.outputs.rpc_url }}
+          private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          allow-mainnet-writes: "false"
+          log-sensitive: "false"
+
+      - name: Verify revealed OpenClaw decision
+        id: openclaw_verify
+        uses: ./integrations/github-action
+        with:
+          action: verify
+          commit-id: ${{ steps.artifact_meta.outputs.commit_id }}
+          contract-address: ${{ steps.artifact_meta.outputs.contract }}
+          rpc-url: ${{ steps.rpc.outputs.rpc_url }}
+          log-sensitive: "false"
+
+      - name: Write reveal artifact
+        id: reveal_artifact
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_ARTIFACT_FILE: ${{ steps.fetch_artifact.outputs.artifact_file }}
+          COMMIT_ID: ${{ steps.artifact_meta.outputs.commit_id }}
+          REVEAL_TX: ${{ steps.openclaw_reveal.outputs.tx-hash }}
+          VERIFIED: ${{ steps.openclaw_verify.outputs.verified }}
+          HASH: ${{ steps.openclaw_verify.outputs.hash }}
+        run: |
+          mkdir -p .clawcommit/openclaw
+          REVEAL_FILE=".clawcommit/openclaw/pr-${PR_NUMBER}-revealed.json"
+
+          node <<'NODE'
+          const fs = require("fs");
+          const artifact = JSON.parse(fs.readFileSync(process.env.PR_ARTIFACT_FILE, "utf8"));
+
+          artifact.workflow = "openclaw-merge-reveal";
+          artifact.event = "pull_request.closed";
+          artifact.revealTx = process.env.REVEAL_TX;
+          artifact.hash = process.env.HASH || artifact.hash;
+          artifact.onchainVerify = process.env.VERIFIED;
+          artifact.replay = process.env.VERIFIED === "true" ? "verified" : "failed";
+          artifact.revealedAt = new Date().toISOString();
+          artifact.runUrl = process.env.GITHUB_SERVER_URL + "/" + process.env.GITHUB_REPOSITORY + "/actions/runs/" + process.env.GITHUB_RUN_ID;
+
+          fs.writeFileSync(
+            `.clawcommit/openclaw/pr-${process.env.PR_NUMBER}-revealed.json`,
+            `${JSON.stringify(artifact, null, 2)}\n`
+          );
+          NODE
+
+          echo "artifact_file=$REVEAL_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Post redacted merge reveal comment with explorer links
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/integration/post-cycle-links.js \
+            --artifact "${{ steps.reveal_artifact.outputs.artifact_file }}" \
+            --title "OpenClaw Merge Reveal (Redacted)" \
+            --out ".clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-revealed.md" \
+            --post-gh-pr "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --append-step-summary
+
+      - name: Upload OpenClaw reveal artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clawcommit-openclaw-pr-${{ github.event.pull_request.number }}-revealed
+          path: |
+            .clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-revealed.json
+            .clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-revealed.md
+          if-no-files-found: error
+
+      - name: Fail if replay verification failed
+        shell: bash
+        run: |
+          if [ "${{ steps.openclaw_verify.outputs.verified }}" != "true" ]; then
+            echo "OpenClaw reveal verification failed" >&2
+            exit 1
+          fi

@@ -1,0 +1,270 @@
+name: OpenClaw PR Commit
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  openclaw-pr-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Resolve testnet RPC URL
+        id: rpc
+        shell: bash
+        run: |
+          RPC_URL="${{ secrets.E2E_TESTNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="${{ secrets.BSC_TESTNET_RPC_URL }}"
+          fi
+          if [ -z "$RPC_URL" ]; then
+            echo "Missing E2E_TESTNET_RPC_URL or BSC_TESTNET_RPC_URL secret" >&2
+            exit 1
+          fi
+          echo "rpc_url=$RPC_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.CLAWCOMMIT_CONTRACT }}" ]; then
+            echo "Missing CLAWCOMMIT_CONTRACT secret" >&2
+            exit 1
+          fi
+          if [ -z "${{ secrets.DEPLOYER_PRIVATE_KEY }}" ]; then
+            echo "Missing DEPLOYER_PRIVATE_KEY secret" >&2
+            exit 1
+          fi
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install SDK dependencies
+        run: npm ci --prefix integrations/sdk
+
+      - name: Build SDK
+        run: npm run build --prefix integrations/sdk
+
+      - name: Install GitHub Action dependencies
+        run: npm ci --prefix integrations/github-action
+
+      - name: Check Node version
+        id: nodecheck
+        continue-on-error: true
+        run: npm run check:node
+
+      - name: Compile contracts
+        id: compile
+        continue-on-error: true
+        run: npm run compile
+
+      - name: Run tests
+        id: tests
+        continue-on-error: true
+        run: npm test
+
+      - name: Build OpenClaw input and payload
+        id: openclaw_payload
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          NODECHECK_OUTCOME: ${{ steps.nodecheck.outcome }}
+          COMPILE_OUTCOME: ${{ steps.compile.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir -p .clawcommit/openclaw
+
+          INPUT_FILE=".clawcommit/openclaw/pr-${PR_NUMBER}-input.json"
+          PAYLOAD_FILE=".clawcommit/openclaw/pr-${PR_NUMBER}-payload.json"
+
+          node <<'NODE'
+          const fs = require("fs");
+          const prNumber = process.env.PR_NUMBER;
+          const input = {
+            modelVersion: "openclaw-agent-v1",
+            context: {
+              workflow: "openclaw-pr-validation",
+              repository: process.env.GITHUB_REPOSITORY,
+              ref: process.env.GITHUB_REF,
+              sha: process.env.GITHUB_SHA,
+              actor: process.env.GITHUB_ACTOR,
+              runId: process.env.GITHUB_RUN_ID,
+              runUrl: process.env.RUN_URL,
+            },
+            validations: [
+              {
+                name: "check-node",
+                required: true,
+                passed: process.env.NODECHECK_OUTCOME === "success",
+                details: `step_outcome=${process.env.NODECHECK_OUTCOME}`,
+              },
+              {
+                name: "compile",
+                required: true,
+                passed: process.env.COMPILE_OUTCOME === "success",
+                details: `step_outcome=${process.env.COMPILE_OUTCOME}`,
+              },
+              {
+                name: "tests",
+                required: true,
+                passed: process.env.TESTS_OUTCOME === "success",
+                details: `step_outcome=${process.env.TESTS_OUTCOME}`,
+              },
+            ],
+          };
+          fs.writeFileSync(`.clawcommit/openclaw/pr-${prNumber}-input.json`, `${JSON.stringify(input, null, 2)}\n`);
+          NODE
+
+          node scripts/integration/build-openclaw-payload.js \
+            --input "$INPUT_FILE" \
+            --out "$PAYLOAD_FILE"
+
+          node <<'NODE'
+          const fs = require("fs");
+          const payload = JSON.parse(
+            fs.readFileSync(`.clawcommit/openclaw/pr-${process.env.PR_NUMBER}-payload.json`, "utf8")
+          );
+          const out = process.env.GITHUB_OUTPUT;
+          fs.appendFileSync(out, `prompt<<EOF\n${payload.prompt}\nEOF\n`);
+          fs.appendFileSync(out, `output=${payload.output}\n`);
+          fs.appendFileSync(out, `model_version=${payload.modelVersion}\n`);
+          fs.appendFileSync(out, `prompt_digest=${payload.promptDigest}\n`);
+          fs.appendFileSync(out, `required_validation_count=${payload.requiredValidationCount}\n`);
+          fs.appendFileSync(out, `required_failure_count=${payload.requiredFailureCount}\n`);
+          fs.appendFileSync(out, `payload_file=.clawcommit/openclaw/pr-${process.env.PR_NUMBER}-payload.json\n`);
+          fs.appendFileSync(out, `input_file=.clawcommit/openclaw/pr-${process.env.PR_NUMBER}-input.json\n`);
+          NODE
+
+      - name: Commit OpenClaw decision onchain (testnet)
+        id: openclaw_commit
+        uses: ./integrations/github-action
+        with:
+          action: commit
+          prompt: ${{ steps.openclaw_payload.outputs.prompt }}
+          output: ${{ steps.openclaw_payload.outputs.output }}
+          model-version: ${{ steps.openclaw_payload.outputs.model_version }}
+          contract-address: ${{ secrets.CLAWCOMMIT_CONTRACT }}
+          rpc-url: ${{ steps.rpc.outputs.rpc_url }}
+          private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          allow-mainnet-writes: "false"
+          log-sensitive: "false"
+
+      - name: Write OpenClaw PR artifact
+        id: pr_artifact
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CONTRACT_ADDRESS: ${{ secrets.CLAWCOMMIT_CONTRACT }}
+          COMMIT_ID: ${{ steps.openclaw_commit.outputs.commit-id }}
+          HASH: ${{ steps.openclaw_commit.outputs.hash }}
+          NONCE: ${{ steps.openclaw_commit.outputs.nonce }}
+          COMMIT_TX: ${{ steps.openclaw_commit.outputs.tx-hash }}
+          PROMPT_DIGEST: ${{ steps.openclaw_payload.outputs.prompt_digest }}
+          REQUIRED_VALIDATION_COUNT: ${{ steps.openclaw_payload.outputs.required_validation_count }}
+          REQUIRED_FAILURE_COUNT: ${{ steps.openclaw_payload.outputs.required_failure_count }}
+        run: |
+          ARTIFACT_FILE=".clawcommit/openclaw/pr-${PR_NUMBER}-latest.json"
+
+          node <<'NODE'
+          const fs = require("fs");
+          const prNumber = process.env.PR_NUMBER;
+          const input = JSON.parse(
+            fs.readFileSync(`.clawcommit/openclaw/pr-${prNumber}-input.json`, "utf8")
+          );
+          const payload = JSON.parse(
+            fs.readFileSync(`.clawcommit/openclaw/pr-${prNumber}-payload.json`, "utf8")
+          );
+
+          const requiredCount = Number(process.env.REQUIRED_VALIDATION_COUNT || payload.requiredValidationCount || 0);
+          const requiredFailureCount = Number(process.env.REQUIRED_FAILURE_COUNT || payload.requiredFailureCount || 0);
+
+          const artifact = {
+            profile: "openclaw-native",
+            workflow: "openclaw-pr-commit",
+            event: "pull_request",
+            prNumber: Number(prNumber),
+            network: "bscTestnet",
+            chainId: 97,
+            contract: process.env.CONTRACT_ADDRESS,
+            commitId: process.env.COMMIT_ID,
+            hash: process.env.HASH,
+            commitTx: process.env.COMMIT_TX,
+            revealTx: "",
+            prompt: payload.prompt,
+            output: payload.output,
+            modelVersion: payload.modelVersion,
+            nonce: process.env.NONCE,
+            promptDigest: process.env.PROMPT_DIGEST || payload.promptDigest,
+            promptTemplateVersion: payload.promptTemplateVersion,
+            context: input.context,
+            validations: payload.validations,
+            requiredValidationCount: requiredCount,
+            requiredFailureCount,
+            validationSummary: `required_failed=${requiredFailureCount}/${requiredCount}; total=${payload.validations.length}`,
+            onchainVerify: "pending",
+            replay: "pending",
+            timestamp: new Date().toISOString(),
+            runUrl: process.env.GITHUB_SERVER_URL + "/" + process.env.GITHUB_REPOSITORY + "/actions/runs/" + process.env.GITHUB_RUN_ID,
+          };
+
+          fs.writeFileSync(
+            `.clawcommit/openclaw/pr-${prNumber}-latest.json`,
+            `${JSON.stringify(artifact, null, 2)}\n`
+          );
+          NODE
+
+          echo "artifact_file=$ARTIFACT_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Post redacted PR comment with explorer links
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/integration/post-cycle-links.js \
+            --artifact "${{ steps.pr_artifact.outputs.artifact_file }}" \
+            --title "OpenClaw PR Commit (Redacted)" \
+            --out ".clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-latest.md" \
+            --post-gh-pr "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --append-step-summary
+
+      - name: Upload OpenClaw PR artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clawcommit-openclaw-pr-${{ github.event.pull_request.number }}-latest
+          path: |
+            .clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-latest.json
+            .clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-latest.md
+          if-no-files-found: error
+
+      - name: Fail if required validations failed
+        if: always()
+        shell: bash
+        run: |
+          failed=0
+          if [ "${{ steps.nodecheck.outcome }}" != "success" ]; then
+            echo "Required validation failed: check-node" >&2
+            failed=1
+          fi
+          if [ "${{ steps.compile.outcome }}" != "success" ]; then
+            echo "Required validation failed: compile" >&2
+            failed=1
+          fi
+          if [ "${{ steps.tests.outcome }}" != "success" ]; then
+            echo "Required validation failed: tests" >&2
+            failed=1
+          fi
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi

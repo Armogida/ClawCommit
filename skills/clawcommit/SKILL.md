@@ -1,6 +1,6 @@
 ---
 name: clawcommit
-description: Integrate and operate ClawCommit commit-reveal decision logging for software delivery pipelines. Use when setting up onchain AI decision attestations, wiring CI/CD workflows, running commit/reveal operations, replay-verifying reveal transactions, or troubleshooting deterministic hash mismatches.
+description: Integrate and operate ClawCommit commit-reveal decision logging for software delivery pipelines. Use when setting up onchain AI decision attestations, wiring CI/CD workflows, running commit/reveal operations, replay-verifying reveal transactions, troubleshooting deterministic hash mismatches, or enabling OpenClaw Native PR/merge decision tracking.
 ---
 
 # ClawCommit
@@ -14,6 +14,7 @@ Prioritize deterministic payload handling, secret hygiene, and reproducible veri
 - `GitHub Action`: Use for PR, merge, and release automation.
 - `SDK`: Use for application-level integrations.
 - `MCP server`: Use for agent tool-use integrations.
+- `OpenClaw Native`: Use for deterministic PR validation payloads, redacted PR comments, and artifact-driven merge reveal automation.
 
 Detect available surfaces first:
 - `scripts/commit.ts`, `scripts/reveal.ts`, `scripts/replay.ts`
@@ -22,6 +23,13 @@ Detect available surfaces first:
 - `integrations/mcp-server/index.js`
 
 If none exist, propose one integration mode and implement only what the user requested.
+
+For OpenClaw-specific requests, prioritize:
+- `.github/workflows/openclaw-pr-commit.yml`
+- `.github/workflows/openclaw-merge-reveal.yml`
+- `scripts/integration/build-openclaw-payload.js`
+- `scripts/integration/post-cycle-links.js`
+- `skills/openclaw-native/`
 
 ## Required Configuration
 - `BSC_RPC_URL`: RPC endpoint.
