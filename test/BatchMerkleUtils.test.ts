@@ -1,9 +1,11 @@
 import { expect } from "chai";
 import {
   buildManifest,
+  computeManifestHash,
   computeLeafHash,
   computeMerkleRoot,
   computeParentHash,
+  validateManifest,
   parseDecisionNdjson,
 } from "../scripts/batch/merkle";
 
@@ -45,6 +47,10 @@ describe("Batch Merkle Utilities", function () {
     expect(manifest.root).to.equal(
       computeMerkleRoot(manifest.leaves.map((leaf) => leaf.leafHash))
     );
+
+    const validated = validateManifest(manifest);
+    expect(validated.recomputedRoot).to.equal(manifest.root);
+    expect(validated.manifestHash).to.equal(computeManifestHash(manifest));
   });
 
   it("parses NDJSON decision input", async function () {
@@ -67,5 +73,44 @@ describe("Batch Merkle Utilities", function () {
     expect(() => parseDecisionNdjson(bad)).to.throw(
       "must include string fields: prompt, output, nonce"
     );
+  });
+
+  it("rejects manifest when leafCount does not match leaves length", async function () {
+    const manifest = buildManifest(
+      [
+        { prompt: "p0", output: "o0", nonce: "n0" },
+        { prompt: "p1", output: "o1", nonce: "n1" },
+      ],
+      "v2"
+    );
+    manifest.leafCount = 1;
+
+    expect(() => validateManifest(manifest)).to.throw("leafCount mismatch");
+  });
+
+  it("rejects manifest when leaf index ordering is not sequential", async function () {
+    const manifest = buildManifest(
+      [
+        { prompt: "p0", output: "o0", nonce: "n0" },
+        { prompt: "p1", output: "o1", nonce: "n1" },
+      ],
+      "v2"
+    );
+    manifest.leaves[1].leafIndex = 7;
+
+    expect(() => validateManifest(manifest)).to.throw("Leaf index mismatch");
+  });
+
+  it("rejects manifest when root does not match recomputed root", async function () {
+    const manifest = buildManifest(
+      [
+        { prompt: "p0", output: "o0", nonce: "n0" },
+        { prompt: "p1", output: "o1", nonce: "n1" },
+      ],
+      "v2"
+    );
+    manifest.root = "0x" + "00".repeat(32);
+
+    expect(() => validateManifest(manifest)).to.throw("Manifest root mismatch");
   });
 });

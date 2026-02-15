@@ -140,10 +140,12 @@ Expected response:
 ```json
 {
   "success": true,
-  "decision": "Deploy model v1.0",
-  "nonce": "0x...",
+  "prompt": "[REDACTED]",
+  "output": "[REDACTED]",
+  "nonce": "[REDACTED]",
   "hash": "0x...",
-  "message": "Hash computed successfully. Use this hash for commit operations."
+  "sensitiveFieldsRedacted": true,
+  "message": "Hash computed successfully"
 }
 ```
 
@@ -162,12 +164,13 @@ Claude Code response:
 ```json
 {
   "success": true,
-  "commitId": 7,
+  "commitId": "7",
   "hash": "0xabc123...",
-  "nonce": "0xdef456...",
+  "nonce": "[REDACTED]",
   "txHash": "0x789ghi...",
   "explorerUrl": "https://testnet.bscscan.com/tx/0x789ghi...",
-  "message": "Decision committed successfully. Keep the nonce safe for reveal operation."
+  "sensitiveFieldsRedacted": true,
+  "message": "Decision committed successfully. Sensitive fields are redacted."
 }
 ```
 
@@ -182,8 +185,7 @@ Claude Code response:
 ```json
 {
   "success": true,
-  "commitId": 7,
-  "decision": "Increase GPU allocation to 8x H100s for training",
+  "commitId": "7",
   "verified": true,
   "message": "Decision revealed and verified successfully"
 }
@@ -199,11 +201,14 @@ Claude Code response:
 ```json
 {
   "success": true,
-  "commitId": 7,
-  "decision": "Increase GPU allocation to 8x H100s for training",
+  "commitId": "7",
+  "prompt": "[REDACTED]",
+  "output": "[REDACTED]",
+  "nonce": "[REDACTED]",
   "verified": true,
   "timestamp": "2026-02-14T15:30:00.000Z",
   "committer": "0xYourAddress...",
+  "sensitiveFieldsRedacted": true,
   "message": "Commitment verified successfully"
 }
 ```
@@ -304,10 +309,11 @@ The `clawcommit_verify` and `clawcommit_compute_hash` tools work without a priva
 1. **Never commit private keys** to version control
 2. **Store nonces securely** - you need them to reveal
 3. **Test on testnet first** before using mainnet
-4. **Verify hashes locally** before revealing (tools do this automatically)
-5. **Use separate wallets** for different environments
-6. **Monitor transactions** on BSCScan for unexpected behavior
-7. **Keep dependencies updated** for security patches
+4. **Set `allow_mainnet_writes=true` explicitly** before any mainnet write
+5. **Verify hashes locally** before revealing (tools do this automatically)
+6. **Use separate wallets** for different environments
+7. **Monitor transactions** on BSCScan for unexpected behavior
+8. **Keep dependencies updated** for security patches
 
 ## Next Steps
 

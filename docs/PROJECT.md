@@ -64,7 +64,7 @@ The project is fully reproducible with public GitHub repository at https://githu
 git clone https://github.com/Armogida/ClawCommit.git && cd ClawCommit
 npm install && npx hardhat compile && npm test
 ```
-All 56 tests pass. The full commit-reveal-verify cycle works on local Hardhat network. For BSC deployment, see `README.md` "Mainnet Runbook" section. No external services required.
+All tests pass. The full commit-reveal-verify cycle works on local Hardhat network. For BSC deployment, see `README.md` "Mainnet Runbook" section. No external services required.
 
 ### 3. No Token Launches
 This project implements **zero token logic**. The smart contract (`contracts/ClawCommit.sol`) exclusively provides commit-reveal storage and cryptographic verification primitives. No ERC20, ERC721, minting, transfers, liquidity pools, airdrops, or governance tokens exist. There is no financial mechanism of any kind. The project is purely a cryptographic integrity tool for autonomous agent decision attestation.
@@ -76,4 +76,4 @@ See [`docs/AI_BUILD_LOG.md`](AI_BUILD_LOG.md) for comprehensive documentation of
 If it can't be verified onchain or reproduced, it won't qualify. ClawCommit is **fully verifiable**:
 - **Onchain**: Contract address on BSC Mainnet is public and verified
 - **Reproducible**: All code is open-source, tests pass, documentation is complete
-- **Independent Verification**: Judges can run `npm test` to verify contract logic locally, then use `npx hardhat run scripts/replay.ts --network bscMainnet -- --contract <ADDRESS> --commit-id 0` to independently verify any commitment on BSC
+- **Independent Verification**: Judges can run `npm test` to verify contract logic locally, then use `npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH> --rpc <BSC_RPC_URL>` to independently verify any commitment on BSC

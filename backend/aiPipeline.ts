@@ -1,5 +1,11 @@
 import { ethers } from "hardhat";
 import { randomBytes } from "crypto";
+import {
+  assertMainnetWriteAllowed,
+  formatSensitive,
+  parseBooleanFlag,
+  requireAddress,
+} from "../scripts/common/safety";
 
 /**
  * AI Decision Pipeline for ClawCommit V2
@@ -30,7 +36,7 @@ interface CommitRecord {
 }
 
 function generateNonce(): string {
-  return randomBytes(32).toString("hex");
+  return ethers.hexlify(randomBytes(32));
 }
 
 function computeDecisionHash(
@@ -57,7 +63,8 @@ async function simulateAIDecision(): Promise<AIDecision> {
 
 async function commitDecision(
   contractAddress: string,
-  decision: AIDecision
+  decision: AIDecision,
+  logSensitive: boolean
 ): Promise<CommitRecord> {
   const ClawCommit = await ethers.getContractFactory("ClawCommit");
   const contract = ClawCommit.attach(contractAddress);
@@ -70,10 +77,10 @@ async function commitDecision(
     nonce
   );
 
-  console.log("[COMMIT] Prompt:      ", decision.prompt);
-  console.log("[COMMIT] Output:      ", decision.output);
+  console.log("[COMMIT] Prompt:      ", formatSensitive(decision.prompt, logSensitive));
+  console.log("[COMMIT] Output:      ", formatSensitive(decision.output, logSensitive));
   console.log("[COMMIT] ModelVersion:", decision.modelVersion);
-  console.log("[COMMIT] Nonce:       ", nonce);
+  console.log("[COMMIT] Nonce:       ", formatSensitive(nonce, logSensitive));
   console.log("[COMMIT] Hash:        ", hash);
 
   const tx = await contract.commitDecision(hash);
@@ -113,12 +120,16 @@ async function commitDecision(
 
 async function revealDecision(
   contractAddress: string,
-  record: CommitRecord
+  record: CommitRecord,
+  logSensitive: boolean
 ): Promise<string> {
   const ClawCommit = await ethers.getContractFactory("ClawCommit");
   const contract = ClawCommit.attach(contractAddress);
 
   console.log("\n[REVEAL] Revealing commit ID:", record.commitId.toString());
+  if (!logSensitive) {
+    console.log("[REVEAL] Sensitive payload logging disabled.");
+  }
 
   const tx = await contract.revealDecision(
     record.commitId,
@@ -137,7 +148,8 @@ async function revealDecision(
 
 async function replayVerify(
   contractAddress: string,
-  commitId: bigint
+  commitId: bigint,
+  logSensitive: boolean
 ): Promise<boolean> {
   const ClawCommit = await ethers.getContractFactory("ClawCommit");
   const contract = ClawCommit.attach(contractAddress);
@@ -146,10 +158,10 @@ async function replayVerify(
 
   console.log("\n[REPLAY] Fetched commitment from chain:");
   console.log("  Hash:        ", commitment.hash);
-  console.log("  Prompt:      ", commitment.prompt);
-  console.log("  Output:      ", commitment.output);
+  console.log("  Prompt:      ", formatSensitive(commitment.prompt, logSensitive));
+  console.log("  Output:      ", formatSensitive(commitment.output, logSensitive));
   console.log("  ModelVersion:", commitment.modelVersion);
-  console.log("  Nonce:       ", commitment.nonce);
+  console.log("  Nonce:       ", formatSensitive(commitment.nonce, logSensitive));
   console.log("  Revealed:    ", commitment.revealed);
   console.log(
     "  Timestamp:   ",
@@ -172,43 +184,77 @@ async function replayVerify(
   return verified;
 }
 
-async function runPipeline(contractAddress: string): Promise<void> {
+async function runPipeline(
+  contractAddress: string,
+  allowMainnetWrites: boolean,
+  logSensitive: boolean
+): Promise<void> {
+  const chainId = (await ethers.provider.getNetwork()).chainId;
+  assertMainnetWriteAllowed(chainId, allowMainnetWrites, "ai pipeline");
+
   console.log("=== ClawCommit V2 AI Decision Pipeline ===\n");
 
   console.log("--- Step 1: AI Agent Decision ---");
   const decision = await simulateAIDecision();
-  console.log("Prompt:", decision.prompt);
-  console.log("Output:", decision.output);
+  console.log("Prompt:", formatSensitive(decision.prompt, logSensitive));
+  console.log("Output:", formatSensitive(decision.output, logSensitive));
   console.log("Model:", decision.modelVersion);
   console.log("Decision Timestamp:", decision.timestamp);
   console.log("");
 
   console.log("--- Step 2: Commit Decision Hash ---");
-  const record = await commitDecision(contractAddress, decision);
+  const record = await commitDecision(contractAddress, decision, logSensitive);
   console.log("");
 
   console.log("--- Step 3: Reveal Decision ---");
-  await revealDecision(contractAddress, record);
+  await revealDecision(contractAddress, record, logSensitive);
 
   console.log("--- Step 4: Independent Replay Verification ---");
-  const verified = await replayVerify(contractAddress, record.commitId);
+  const verified = await replayVerify(contractAddress, record.commitId, logSensitive);
 
   console.log("\n=== Pipeline Complete ===");
   console.log("Commit ID:", record.commitId.toString());
-  console.log("Output:", decision.output);
+  console.log("Output:", formatSensitive(decision.output, logSensitive));
   console.log("Replay Verified:", verified);
 }
 
-const args = process.argv.slice(2);
-const contractIdx = args.indexOf("--contract");
-if (contractIdx === -1) {
-  console.error("Usage: npx hardhat run backend/aiPipeline.ts -- --contract <ADDRESS>");
-  process.exit(1);
+interface PipelineArgs {
+  contractAddress: string;
+  allowMainnetWrites: boolean;
+  logSensitive: boolean;
 }
 
-runPipeline(args[contractIdx + 1])
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+function parseArgs(argv: string[]): PipelineArgs {
+  const get = (flag: string): string | undefined => {
+    const idx = argv.indexOf(flag);
+    return idx !== -1 ? argv[idx + 1] : undefined;
+  };
+
+  const contractAddress = get("--contract");
+  if (!contractAddress) {
+    throw new Error(
+      "Usage: npx hardhat run backend/aiPipeline.ts -- --contract <ADDRESS> [--allow-mainnet-writes <true|false>] [--log-sensitive <true|false>]"
+    );
+  }
+
+  return {
+    contractAddress: requireAddress(contractAddress, "--contract"),
+    allowMainnetWrites: parseBooleanFlag(argv, "--allow-mainnet-writes"),
+    logSensitive: parseBooleanFlag(argv, "--log-sensitive"),
+  };
+}
+
+const args = process.argv.slice(2);
+
+try {
+  const parsed = parseArgs(args);
+  runPipeline(parsed.contractAddress, parsed.allowMainnetWrites, parsed.logSensitive)
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
+} catch (error) {
+  console.error((error as Error).message || error);
+  process.exit(1);
+}

@@ -1,8 +1,7 @@
 import * as fs from "fs";
 import {
   BatchManifest,
-  computeLeafHash,
-  computeMerkleRoot,
+  validateManifest,
 } from "./merkle";
 
 interface RecomputeArgs {
@@ -40,35 +39,13 @@ function loadManifest(manifestPath: string): BatchManifest {
 async function main(): Promise<void> {
   const { manifestPath } = parseArgs(process.argv.slice(2));
   const manifest = loadManifest(manifestPath);
-
-  const recomputedLeafHashes = manifest.leaves.map((leaf, index) => {
-    if (leaf.leafIndex !== index) {
-      throw new Error(`Leaf index mismatch at position ${index}`);
-    }
-
-    const leafHash = computeLeafHash(
-      leaf.prompt,
-      leaf.output,
-      manifest.modelVersion,
-      leaf.nonce,
-      leaf.leafIndex
-    );
-
-    if (leafHash !== leaf.leafHash) {
-      throw new Error(
-        `Leaf hash mismatch at index ${index}: expected ${leaf.leafHash}, got ${leafHash}`
-      );
-    }
-
-    return leafHash;
-  });
-
-  const recomputedRoot = computeMerkleRoot(recomputedLeafHashes);
-  const matches = recomputedRoot === manifest.root;
+  const validated = validateManifest(manifest);
+  const matches = validated.recomputedRoot === manifest.root;
 
   console.log("Manifest:", manifestPath);
   console.log("Recorded root:  ", manifest.root);
-  console.log("Recomputed root:", recomputedRoot);
+  console.log("Recomputed root:", validated.recomputedRoot);
+  console.log("Manifest hash:  ", validated.manifestHash);
 
   if (!matches) {
     console.error("Root mismatch.");

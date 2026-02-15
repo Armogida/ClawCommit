@@ -1,4 +1,4 @@
-import { AbiCoder, keccak256 } from "ethers";
+import { AbiCoder, isHexString, keccak256, toUtf8Bytes } from "ethers";
 
 export interface DecisionInput {
   prompt: string;
@@ -19,7 +19,19 @@ export interface BatchManifest {
   leaves: ManifestLeaf[];
 }
 
+export interface ManifestValidationResult {
+  manifest: BatchManifest;
+  canonicalManifest: BatchManifest;
+  canonicalJson: string;
+  manifestHash: string;
+  recomputedRoot: string;
+}
+
 const abiCoder = AbiCoder.defaultAbiCoder();
+
+function isHex32(value: string): boolean {
+  return isHexString(value, 32);
+}
 
 export function computeLeafHash(
   prompt: string,
@@ -94,6 +106,108 @@ export function buildManifest(
   };
 }
 
+export function toCanonicalManifest(manifest: BatchManifest): BatchManifest {
+  return {
+    version: "clawcommit-batch-v1",
+    modelVersion: manifest.modelVersion,
+    leafCount: manifest.leafCount,
+    root: manifest.root,
+    leaves: manifest.leaves.map((leaf) => ({
+      leafIndex: leaf.leafIndex,
+      prompt: leaf.prompt,
+      output: leaf.output,
+      nonce: leaf.nonce,
+      leafHash: leaf.leafHash,
+    })),
+  };
+}
+
+export function canonicalizeManifest(manifest: BatchManifest): string {
+  return JSON.stringify(toCanonicalManifest(manifest));
+}
+
+export function computeManifestHash(manifest: BatchManifest): string {
+  return keccak256(toUtf8Bytes(canonicalizeManifest(manifest)));
+}
+
+export function validateManifest(manifest: BatchManifest): ManifestValidationResult {
+  if (
+    manifest.version !== "clawcommit-batch-v1" ||
+    typeof manifest.modelVersion !== "string" ||
+    !Array.isArray(manifest.leaves)
+  ) {
+    throw new Error("Invalid manifest format");
+  }
+
+  if (!Number.isInteger(manifest.leafCount) || manifest.leafCount <= 0) {
+    throw new Error("Manifest leafCount must be a positive integer");
+  }
+
+  if (manifest.leafCount !== manifest.leaves.length) {
+    throw new Error(
+      `Manifest leafCount mismatch: expected ${manifest.leafCount} leaves, got ${manifest.leaves.length}`
+    );
+  }
+
+  if (!isHex32(manifest.root)) {
+    throw new Error("Manifest root must be a bytes32 hex string");
+  }
+
+  const recomputedLeafHashes = manifest.leaves.map((leaf, index) => {
+    if (!Number.isInteger(leaf.leafIndex) || leaf.leafIndex < 0) {
+      throw new Error(`Leaf index at position ${index} must be a non-negative integer`);
+    }
+    if (leaf.leafIndex !== index) {
+      throw new Error(`Leaf index mismatch at position ${index}`);
+    }
+    if (
+      typeof leaf.prompt !== "string" ||
+      typeof leaf.output !== "string" ||
+      typeof leaf.nonce !== "string" ||
+      typeof leaf.leafHash !== "string"
+    ) {
+      throw new Error(`Leaf ${index} must include string prompt/output/nonce/leafHash fields`);
+    }
+    if (!isHex32(leaf.leafHash)) {
+      throw new Error(`Leaf ${index} hash must be a bytes32 hex string`);
+    }
+
+    const recomputed = computeLeafHash(
+      leaf.prompt,
+      leaf.output,
+      manifest.modelVersion,
+      leaf.nonce,
+      leaf.leafIndex
+    );
+    if (recomputed !== leaf.leafHash) {
+      throw new Error(
+        `Leaf hash mismatch at index ${index}: expected ${leaf.leafHash}, got ${recomputed}`
+      );
+    }
+
+    return recomputed;
+  });
+
+  const recomputedRoot = computeMerkleRoot(recomputedLeafHashes);
+  if (recomputedRoot !== manifest.root) {
+    throw new Error(
+      `Manifest root mismatch: expected ${manifest.root}, recomputed ${recomputedRoot}`
+    );
+  }
+
+  const canonicalManifest = toCanonicalManifest(manifest);
+  const canonicalJson = canonicalizeManifest(canonicalManifest);
+  const manifestHash = computeManifestHash(canonicalManifest);
+
+  return {
+    manifest,
+    canonicalManifest,
+    canonicalJson,
+    manifestHash,
+    recomputedRoot,
+  };
+}
+
 export function parseDecisionNdjson(raw: string): DecisionInput[] {
   const lines = raw
     .split(/\r?\n/)
@@ -126,11 +240,14 @@ export function parseDecisionNdjson(raw: string): DecisionInput[] {
     }
 
     const record = parsed as Record<string, string>;
+    if (!record.nonce.trim()) {
+      throw new Error(`Line ${index + 1} has empty nonce`);
+    }
 
     return {
       prompt: record.prompt,
       output: record.output,
-      nonce: record.nonce,
+      nonce: record.nonce.trim(),
     };
   });
 }

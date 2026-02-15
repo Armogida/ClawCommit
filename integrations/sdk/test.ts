@@ -1,25 +1,30 @@
 /**
- * Test file for ClawCommit SDK
+ * Runtime test file for ClawCommit SDK.
  *
- * To run:
- * 1. Set environment variables: PRIVATE_KEY and CONTRACT_ADDRESS
- * 2. npm install
- * 3. npm run test
+ * This test suite is CI-safe: it runs offline by default and only performs
+ * chain calls when a valid CONTRACT_ADDRESS is provided.
  */
 
+import assert from "assert";
+import { ethers } from "ethers";
 import { ClawCommit, DecisionPayload } from "./src/index";
 
+const FALLBACK_ADDRESS = "0x0000000000000000000000000000000000000001";
 const config = {
-  contractAddress: process.env.CONTRACT_ADDRESS || "0x...",
+  contractAddress: process.env.CONTRACT_ADDRESS || "",
   privateKey: process.env.PRIVATE_KEY,
   rpcUrl: process.env.RPC_URL,
 };
+
+function hasValidContractAddress(address: string): boolean {
+  return !!address && ethers.isAddress(address);
+}
 
 function samplePayload(suffix = ""): DecisionPayload {
   return {
     prompt: `Should we execute policy${suffix}?`,
     output: `APPROVE_POLICY${suffix}`,
-    modelVersion: "clawcommit-sdk-test-v2"
+    modelVersion: "clawcommit-sdk-test-v2",
   };
 }
 
@@ -32,6 +37,8 @@ async function testStaticMethods() {
   console.log("Generated nonce 2:", nonce2);
   console.log("Nonces are unique:", nonce1 !== nonce2);
   console.log("Nonce length:", nonce1.length, "characters");
+  assert(/^0x[0-9a-fA-F]{64}$/.test(nonce1), "Nonce 1 must be 0x-prefixed 32-byte hex");
+  assert(/^0x[0-9a-fA-F]{64}$/.test(nonce2), "Nonce 2 must be 0x-prefixed 32-byte hex");
 
   const payload = samplePayload("_STATIC");
   const { hash, nonce } = ClawCommit.computeDecisionHash(payload);
@@ -42,10 +49,78 @@ async function testStaticMethods() {
 
   const { hash: hash2 } = ClawCommit.computeDecisionHash(payload, nonce);
   console.log("\nHash is deterministic:", hash === hash2);
+  assert.strictEqual(hash, hash2, "computeDecisionHash must be deterministic for same nonce");
+}
+
+async function testConstructorValidation() {
+  console.log("\n=== Testing Constructor Validation ===\n");
+
+  assert.throws(
+    () => new ClawCommit({ contractAddress: "0x..." }),
+    /cannot be a placeholder/
+  );
+  assert.throws(
+    () => new ClawCommit({ contractAddress: "invalid-address" }),
+    /Invalid contract address/
+  );
+
+  const client = new ClawCommit({
+    contractAddress: FALLBACK_ADDRESS,
+    rpcUrl: "http://127.0.0.1:8545",
+  });
+  console.log("Constructor accepts valid address:", client.getContractAddress());
+}
+
+async function testBigIntSafety() {
+  console.log("\n=== Testing BigInt Safety ===\n");
+
+  const client = new ClawCommit({
+    contractAddress: FALLBACK_ADDRESS,
+    rpcUrl: "http://127.0.0.1:8545",
+  });
+
+  const capturedCommitIds: bigint[] = [];
+  (client as unknown as { contract: unknown }).contract = {
+    async commitCount() {
+      return 123456789012345678901234567890n;
+    },
+    async getCommitment(commitId: bigint) {
+      capturedCommitIds.push(commitId);
+      return {
+        hash: "0x" + "ab".repeat(32),
+        timestamp: 1735689600n,
+        committer: FALLBACK_ADDRESS,
+        revealed: true,
+        prompt: "p",
+        output: "o",
+        modelVersion: "m",
+        nonce: "0x" + "11".repeat(32),
+      };
+    },
+    async verifyReplay() {
+      return true;
+    },
+  };
+
+  const count = await client.getCommitCount();
+  assert.strictEqual(typeof count, "bigint", "getCommitCount must return bigint");
+  console.log("Commit count type:", typeof count);
+  console.log("Commit count value:", count.toString());
+
+  const largeId = "123456789012345678901234567890";
+  const commitment = await client.getCommitment(largeId);
+  assert.strictEqual(capturedCommitIds[0].toString(), largeId, "commitId must stay precise");
+  assert.strictEqual(commitment.hash.startsWith("0x"), true);
+  console.log("Large commitId handled without precision loss");
 }
 
 async function testReadOnlyMode() {
   console.log("\n=== Testing Read-Only Mode ===\n");
+
+  if (!hasValidContractAddress(config.contractAddress)) {
+    console.log("Skipping chain read test - CONTRACT_ADDRESS not set to a valid address");
+    return;
+  }
 
   const reader = new ClawCommit({
     contractAddress: config.contractAddress,
@@ -58,27 +133,7 @@ async function testReadOnlyMode() {
 
   try {
     const count = await reader.getCommitCount();
-    console.log("\nTotal commits in contract:", count);
-
-    if (count > 0) {
-      const commitment = await reader.getCommitment(0);
-      console.log("\nCommitment 0 summary:");
-      console.log("Committer:", commitment.committer);
-      console.log("Revealed:", commitment.revealed);
-      console.log("Timestamp:", new Date(Number(commitment.timestamp) * 1000).toISOString());
-
-      if (commitment.revealed) {
-        const proof = await reader.verify(0);
-        console.log("\nVerification:");
-        console.log("Prompt:", proof.prompt);
-        console.log("Output:", proof.output);
-        console.log("Model:", proof.modelVersion);
-        console.log("Nonce:", proof.nonce);
-        console.log("Stored hash:", proof.storedHash);
-        console.log("Replay hash:", proof.replayHash);
-        console.log("Verified:", proof.verified);
-      }
-    }
+    console.log("\nTotal commits in contract:", count.toString());
   } catch (error) {
     console.error("Error in read-only tests:", (error as Error).message);
   }
@@ -89,7 +144,10 @@ async function testWriteOperations() {
 
   if (!config.privateKey) {
     console.log("Skipping write tests - no private key provided");
-    console.log("Set PRIVATE_KEY environment variable to test commit/reveal");
+    return;
+  }
+  if (!hasValidContractAddress(config.contractAddress)) {
+    console.log("Skipping write tests - CONTRACT_ADDRESS is missing or invalid");
     return;
   }
 
@@ -104,37 +162,21 @@ async function testWriteOperations() {
 
   try {
     const payload = samplePayload(`_${Date.now()}`);
-    console.log("\nCommitting payload:", payload);
-
     const commitResult = await claw.commit(payload);
-    console.log("\nCommit successful:");
-    console.log("Commit ID:", commitResult.commitId);
-    console.log("Hash:", commitResult.hash);
-    console.log("Nonce:", commitResult.nonce);
-    console.log("Tx:", commitResult.txHash);
+    console.log("Commit successful:", commitResult.commitId);
 
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     const revealResult = await claw.reveal(
-      parseInt(commitResult.commitId, 10),
+      commitResult.commitId,
       {
         prompt: commitResult.prompt,
         output: commitResult.output,
-        modelVersion: commitResult.modelVersion
+        modelVersion: commitResult.modelVersion,
       },
       commitResult.nonce
     );
-
-    console.log("\nReveal successful:");
-    console.log("Tx:", revealResult.txHash);
-    console.log("Verified:", revealResult.verified);
-
-    const proof = await claw.verify(parseInt(commitResult.commitId, 10));
-    console.log("\nVerification result:");
-    console.log("Prompt:", proof.prompt);
-    console.log("Output:", proof.output);
-    console.log("Model:", proof.modelVersion);
-    console.log("Verified:", proof.verified);
+    console.log("Reveal successful:", revealResult.txHash);
   } catch (error) {
     console.error("Error in write tests:", (error as Error).message);
   }
@@ -144,7 +186,7 @@ async function testErrorHandling() {
   console.log("\n=== Testing Error Handling ===\n");
 
   try {
-    const readOnly = new ClawCommit({ contractAddress: config.contractAddress });
+    const readOnly = new ClawCommit({ contractAddress: FALLBACK_ADDRESS });
     await readOnly.commit(samplePayload("_NO_KEY"));
     console.log("ERROR: Should have thrown for commit without private key");
   } catch (error) {
@@ -153,8 +195,8 @@ async function testErrorHandling() {
   }
 
   try {
-    const readOnly = new ClawCommit({ contractAddress: config.contractAddress });
-    await readOnly.reveal(0, samplePayload("_NO_KEY"), "nonce");
+    const readOnly = new ClawCommit({ contractAddress: FALLBACK_ADDRESS });
+    await readOnly.reveal(0, samplePayload("_NO_KEY"), "0x" + "22".repeat(32));
     console.log("ERROR: Should have thrown for reveal without private key");
   } catch (error) {
     console.log("\nCorrectly threw error for reveal without private key:");
@@ -166,21 +208,21 @@ async function runAllTests() {
   console.log("ClawCommit SDK Test Suite");
   console.log("========================\n");
   console.log("Configuration:");
-  console.log("Contract:", config.contractAddress);
-  console.log("RPC:", config.rpcUrl || "BSC Mainnet (default)");
+  console.log("Contract:", config.contractAddress || "<not-set>");
+  console.log("RPC:", config.rpcUrl || "BSC Testnet (default)");
   console.log("Private Key:", config.privateKey ? "Provided" : "Not provided (read-only mode)");
 
-  try {
-    await testStaticMethods();
-    await testReadOnlyMode();
-    await testErrorHandling();
-    await testWriteOperations();
+  await testStaticMethods();
+  await testConstructorValidation();
+  await testBigIntSafety();
+  await testReadOnlyMode();
+  await testErrorHandling();
+  await testWriteOperations();
 
-    console.log("\n=== All Tests Complete ===\n");
-  } catch (error) {
-    console.error("\nTest suite error:", error);
-    process.exit(1);
-  }
+  console.log("\n=== All Tests Complete ===\n");
 }
 
-runAllTests().catch(console.error);
+runAllTests().catch((error) => {
+  console.error("\nTest suite error:", error);
+  process.exit(1);
+});

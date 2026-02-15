@@ -1,8 +1,12 @@
 import { ethers } from "hardhat";
+import {
+  parseNonNegativeBigInt,
+  requireAddress,
+} from "../common/safety";
 
 interface GetBatchArgs {
   contract: string;
-  batchId: number;
+  batchId: bigint;
 }
 
 function parseArgs(argv: string[]): GetBatchArgs {
@@ -20,12 +24,10 @@ function parseArgs(argv: string[]): GetBatchArgs {
     );
   }
 
-  const batchId = Number(batchIdRaw);
-  if (!Number.isInteger(batchId) || batchId < 0) {
-    throw new Error("--batch-id must be a non-negative integer");
-  }
-
-  return { contract, batchId };
+  return {
+    contract: requireAddress(contract, "--contract"),
+    batchId: parseNonNegativeBigInt(batchIdRaw, "--batch-id"),
+  };
 }
 
 async function main(): Promise<void> {

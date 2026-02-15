@@ -1,6 +1,16 @@
 import { ethers, network } from "hardhat";
+import {
+  assertMainnetWriteAllowed,
+  parseBooleanFlag,
+} from "./common/safety";
 
 async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+  const allowMainnetWrites = parseBooleanFlag(argv, "--allow-mainnet-writes");
+
+  const chainId = (await ethers.provider.getNetwork()).chainId;
+  assertMainnetWriteAllowed(chainId, allowMainnetWrites, "deploy script");
+
   console.log("Deploying ClawCommit...");
   console.log("Network:", network.name);
 

@@ -30,6 +30,14 @@ inputs:
     description: 'BSC RPC URL'
     required: false
     default: 'https://bsc-dataseed.binance.org/'
+  allow-mainnet-writes:
+    description: 'Set to true to allow commit/reveal writes on BSC mainnet (chainId 56)'
+    required: false
+    default: 'false'
+  log-sensitive:
+    description: 'Set to true to log prompt/output/nonce values'
+    required: false
+    default: 'false'
   private-key:
     description: 'Deployer private key (use GitHub Secrets)'
     required: false

@@ -2,6 +2,10 @@ import { ethers, network, run } from "hardhat";
 import { randomBytes } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
+import {
+  assertMainnetWriteAllowed,
+  parseBooleanFlag,
+} from "./common/safety";
 
 function computeDecisionHash(
   prompt: string,
@@ -32,6 +36,9 @@ function isMainnetNetworkName(name: string): boolean {
 }
 
 async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+  const allowMainnetWrites = parseBooleanFlag(argv, "--allow-mainnet-writes");
+
   const proofDir = path.join(process.cwd(), "deployment-proof");
   fs.mkdirSync(proofDir, { recursive: true });
 
@@ -40,6 +47,7 @@ async function main(): Promise<void> {
 
   const providerNetwork = await ethers.provider.getNetwork();
   const chainId = providerNetwork.chainId.toString();
+  assertMainnetWriteAllowed(providerNetwork.chainId, allowMainnetWrites, "deployAndProve script");
   const [deployer] = await ethers.getSigners();
 
   const balance = await ethers.provider.getBalance(deployer.address);

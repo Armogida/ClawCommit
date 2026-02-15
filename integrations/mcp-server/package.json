@@ -5,6 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "test": "node unit-test.js",
     "start": "node index.js"
   },
   "keywords": [

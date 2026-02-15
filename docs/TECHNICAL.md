@@ -112,20 +112,28 @@ npx hardhat run scripts/deploy.ts --network bsc
 ### Commit / reveal
 
 ```bash
-HARDHAT_NETWORK=bsc npx ts-node scripts/commit.ts \
+HARDHAT_NETWORK=bscTestnet npx ts-node scripts/commit.ts \
   --contract <CONTRACT_ADDRESS> \
   --prompt "Should we rebalance treasury?" \
   --output "APPROVE_REBALANCE" \
   --model-version "clawcommit-v2.0" \
-  --nonce "nonce-123"
+  --nonce "0x<32-byte-hex-nonce>" \
+  --log-sensitive true
 
-HARDHAT_NETWORK=bsc npx ts-node scripts/reveal.ts \
+HARDHAT_NETWORK=bscTestnet npx ts-node scripts/reveal.ts \
   --contract <CONTRACT_ADDRESS> \
   --commit-id <ID> \
   --prompt "Should we rebalance treasury?" \
   --output "APPROVE_REBALANCE" \
   --model-version "clawcommit-v2.0" \
-  --nonce "nonce-123"
+  --nonce "0x<32-byte-hex-nonce>" \
+  --log-sensitive true
+```
+
+Mainnet writes require explicit opt-in:
+
+```bash
+--allow-mainnet-writes true
 ```
 
 ### Replay verification
@@ -203,11 +211,11 @@ npx ts-node scripts/batch/build.ts \
 npx ts-node scripts/batch/recomputeRoot.ts \
   --manifest artifacts/batches/batch-001.manifest.json
 
-HARDHAT_NETWORK=bsc npx ts-node scripts/batch/commitBatch.ts \
+HARDHAT_NETWORK=bscTestnet npx ts-node scripts/batch/commitBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --manifest artifacts/batches/batch-001.manifest.json
 
-HARDHAT_NETWORK=bsc npx ts-node scripts/batch/getBatch.ts \
+HARDHAT_NETWORK=bscTestnet npx ts-node scripts/batch/getBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --batch-id 0
 

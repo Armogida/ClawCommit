@@ -1,10 +1,11 @@
-import { ethers } from "ethers";
 import { randomBytes } from "crypto";
+import { ethers } from "ethers";
 
 export interface ClawCommitConfig {
   contractAddress: string;
   rpcUrl?: string;
   privateKey?: string;
+  allowMainnetWrites?: boolean;
 }
 
 export interface DecisionPayload {
@@ -40,6 +41,8 @@ export interface VerifyResult extends DecisionPayload {
   revealed: boolean;
 }
 
+export type CommitIdInput = bigint | number | string;
+
 const CLAWCOMMIT_ABI = [
   "function commitDecision(bytes32 _hash) external returns (uint256 commitId)",
   "function revealDecision(uint256 _commitId, string calldata _prompt, string calldata _output, string calldata _modelVersion, string calldata _nonce) external",
@@ -48,29 +51,61 @@ const CLAWCOMMIT_ABI = [
   "function commitCount() external view returns (uint256)",
   "function computeDecisionHash(string calldata _prompt, string calldata _output, string calldata _modelVersion, string calldata _nonce) external pure returns (bytes32)",
   "event CommitCreated(uint256 indexed commitId, address indexed committer, bytes32 hash, uint256 timestamp)",
-  "event CommitRevealed(uint256 indexed commitId, address indexed committer, string prompt, string output, string modelVersion)"
+  "event CommitRevealed(uint256 indexed commitId, address indexed committer, string prompt, string output, string modelVersion)",
 ];
+
+const BSC_MAINNET_CHAIN_ID = 56n;
 
 const DEFAULT_RPC_URLS = {
   mainnet: "https://bsc-dataseed1.binance.org",
-  testnet: "https://data-seed-prebsc-1-s1.binance.org:8545"
+  testnet: "https://data-seed-prebsc-1-s1.binance.org:8545",
 };
 
 const EXPLORER_URLS = {
   mainnet: "https://bscscan.com",
-  testnet: "https://testnet.bscscan.com"
+  testnet: "https://testnet.bscscan.com",
 };
+
+function normalizeNonce(nonce: string): string {
+  const normalized = nonce.trim();
+  if (!normalized) {
+    throw new Error("nonce must be a non-empty string");
+  }
+  return normalized;
+}
+
+function isPlaceholderAddress(address: string): boolean {
+  const normalized = address.trim();
+  return (
+    normalized.length === 0 ||
+    normalized === "0x..." ||
+    normalized.includes("<") ||
+    normalized.includes(">")
+  );
+}
 
 export class ClawCommit {
   private contract: ethers.Contract;
   private provider: ethers.JsonRpcProvider;
   private signer?: ethers.Wallet;
   private explorerBase: string;
+  private allowMainnetWrites: boolean;
 
   constructor(config: ClawCommitConfig) {
-    const rpcUrl = config.rpcUrl || DEFAULT_RPC_URLS.mainnet;
-    const isTestnet = rpcUrl.includes("testnet") || rpcUrl.includes("test-rpc");
+    if (isPlaceholderAddress(config.contractAddress)) {
+      throw new Error(
+        "contractAddress is required and cannot be a placeholder value (e.g. 0x...)"
+      );
+    }
+    if (!ethers.isAddress(config.contractAddress)) {
+      throw new Error(`Invalid contract address: ${config.contractAddress}`);
+    }
+
+    const rpcUrl = config.rpcUrl || DEFAULT_RPC_URLS.testnet;
+    const isTestnet =
+      rpcUrl.includes("testnet") || rpcUrl.includes("prebsc") || rpcUrl.includes("test-rpc");
     this.explorerBase = isTestnet ? EXPLORER_URLS.testnet : EXPLORER_URLS.mainnet;
+    this.allowMainnetWrites = config.allowMainnetWrites ?? false;
 
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
 
@@ -82,6 +117,37 @@ export class ClawCommit {
     }
   }
 
+  private async assertWriteAllowed(): Promise<void> {
+    const chainId = (await this.provider.getNetwork()).chainId;
+    if (chainId === BSC_MAINNET_CHAIN_ID && !this.allowMainnetWrites) {
+      throw new Error(
+        "Refusing write on BSC mainnet. Set allowMainnetWrites=true to allow mainnet transactions."
+      );
+    }
+  }
+
+  private static normalizeCommitId(commitId: CommitIdInput): bigint {
+    if (typeof commitId === "bigint") {
+      if (commitId < 0n) {
+        throw new Error("commitId must be non-negative");
+      }
+      return commitId;
+    }
+
+    if (typeof commitId === "number") {
+      if (!Number.isSafeInteger(commitId) || commitId < 0) {
+        throw new Error("commitId must be a non-negative safe integer");
+      }
+      return BigInt(commitId);
+    }
+
+    const trimmed = commitId.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error(`commitId must be a non-negative integer. Received: ${commitId}`);
+    }
+    return BigInt(trimmed);
+  }
+
   async commit(
     payloadOrDecision: DecisionPayload | string,
     nonce?: string
@@ -90,12 +156,13 @@ export class ClawCommit {
       throw new Error("Private key required for commit operation. Initialize SDK with privateKey.");
     }
 
+    await this.assertWriteAllowed();
+
     const payload = ClawCommit.normalizePayload(payloadOrDecision);
     const { hash, nonce: finalNonce } = ClawCommit.computeDecisionHash(payload, nonce);
 
     const tx = await this.contract.commitDecision(hash);
     const receipt = await tx.wait();
-
     if (!receipt) {
       throw new Error("Transaction failed - no receipt");
     }
@@ -105,7 +172,7 @@ export class ClawCommit {
         try {
           return this.contract.interface.parseLog({
             topics: [...log.topics],
-            data: log.data
+            data: log.data,
           });
         } catch {
           return null;
@@ -127,12 +194,12 @@ export class ClawCommit {
       output: payload.output,
       modelVersion: payload.modelVersion,
       txHash: receipt.hash,
-      explorerUrl: `${this.explorerBase}/tx/${receipt.hash}`
+      explorerUrl: `${this.explorerBase}/tx/${receipt.hash}`,
     };
   }
 
   async reveal(
-    commitId: number,
+    commitId: CommitIdInput,
     payloadOrDecision: DecisionPayload | string,
     nonce: string
   ): Promise<RevealResult> {
@@ -140,52 +207,56 @@ export class ClawCommit {
       throw new Error("Private key required for reveal operation. Initialize SDK with privateKey.");
     }
 
+    await this.assertWriteAllowed();
+
     const payload = ClawCommit.normalizePayload(payloadOrDecision);
+    const normalizedCommitId = ClawCommit.normalizeCommitId(commitId);
+    const normalizedNonce = normalizeNonce(nonce);
 
     const tx = await this.contract.revealDecision(
-      commitId,
+      normalizedCommitId,
       payload.prompt,
       payload.output,
       payload.modelVersion,
-      nonce
+      normalizedNonce
     );
     const receipt = await tx.wait();
-
     if (!receipt) {
       throw new Error("Transaction failed - no receipt");
     }
 
-    const verifyResult = await this.verify(commitId);
+    const verifyResult = await this.verify(normalizedCommitId);
 
     return {
-      commitId: commitId.toString(),
+      commitId: normalizedCommitId.toString(),
       txHash: receipt.hash,
       verified: verifyResult.verified,
-      explorerUrl: `${this.explorerBase}/tx/${receipt.hash}`
+      explorerUrl: `${this.explorerBase}/tx/${receipt.hash}`,
     };
   }
 
-  async verify(commitId: number): Promise<VerifyResult> {
-    const commitment = await this.contract.getCommitment(commitId);
+  async verify(commitId: CommitIdInput): Promise<VerifyResult> {
+    const normalizedCommitId = ClawCommit.normalizeCommitId(commitId);
+    const commitment = await this.contract.getCommitment(normalizedCommitId);
 
     if (!commitment.revealed) {
-      throw new Error(`Commitment ${commitId} has not been revealed yet`);
+      throw new Error(`Commitment ${normalizedCommitId.toString()} has not been revealed yet`);
     }
 
     const replayHash = ClawCommit.computeDecisionHash(
       {
         prompt: commitment.prompt,
         output: commitment.output,
-        modelVersion: commitment.modelVersion
+        modelVersion: commitment.modelVersion,
       },
       commitment.nonce
     ).hash;
 
-    const contractVerified = await this.contract.verifyReplay(commitId);
+    const contractVerified = await this.contract.verifyReplay(normalizedCommitId);
     const verified = contractVerified && commitment.hash === replayHash;
 
     return {
-      commitId: commitId.toString(),
+      commitId: normalizedCommitId.toString(),
       prompt: commitment.prompt,
       output: commitment.output,
       modelVersion: commitment.modelVersion,
@@ -196,16 +267,15 @@ export class ClawCommit {
       verified,
       timestamp: new Date(Number(commitment.timestamp) * 1000).toISOString(),
       committer: commitment.committer,
-      revealed: commitment.revealed
+      revealed: commitment.revealed,
     };
   }
 
-  async getCommitCount(): Promise<number> {
-    const count = await this.contract.commitCount();
-    return Number(count);
+  async getCommitCount(): Promise<bigint> {
+    return await this.contract.commitCount();
   }
 
-  async getCommitment(commitId: number): Promise<{
+  async getCommitment(commitId: CommitIdInput): Promise<{
     hash: string;
     timestamp: bigint;
     committer: string;
@@ -216,7 +286,8 @@ export class ClawCommit {
     nonce: string;
     decision: string;
   }> {
-    const commitment = await this.contract.getCommitment(commitId);
+    const normalizedCommitId = ClawCommit.normalizeCommitId(commitId);
+    const commitment = await this.contract.getCommitment(normalizedCommitId);
     return {
       hash: commitment.hash,
       timestamp: commitment.timestamp,
@@ -226,7 +297,7 @@ export class ClawCommit {
       output: commitment.output,
       modelVersion: commitment.modelVersion,
       nonce: commitment.nonce,
-      decision: commitment.output
+      decision: commitment.output,
     };
   }
 
@@ -235,7 +306,7 @@ export class ClawCommit {
     nonce?: string
   ): { hash: string; nonce: string } {
     const payload = ClawCommit.normalizePayload(payloadOrDecision);
-    const finalNonce = nonce || ClawCommit.generateNonce();
+    const finalNonce = nonce ? normalizeNonce(nonce) : ClawCommit.generateNonce();
 
     const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
       ["string", "string", "string", "string"],
@@ -254,17 +325,15 @@ export class ClawCommit {
   }
 
   static generateNonce(): string {
-    return randomBytes(32).toString("hex");
+    return ethers.hexlify(randomBytes(32));
   }
 
-  private static normalizePayload(
-    payloadOrDecision: DecisionPayload | string
-  ): DecisionPayload {
+  private static normalizePayload(payloadOrDecision: DecisionPayload | string): DecisionPayload {
     if (typeof payloadOrDecision === "string") {
       return {
         prompt: "",
         output: payloadOrDecision,
-        modelVersion: "legacy-v1"
+        modelVersion: "legacy-v1",
       };
     }
     return payloadOrDecision;

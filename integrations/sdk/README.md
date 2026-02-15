@@ -13,8 +13,19 @@ import { ClawCommit } from '@clawcommit/sdk';
 
 const claw = new ClawCommit({
   contractAddress: '0xYourContractAddress',
-  rpcUrl: 'https://bsc-dataseed.binance.org/',
+  rpcUrl: 'https://data-seed-prebsc-1-s1.binance.org:8545/', // defaults to bscTestnet if omitted
   privateKey: process.env.PRIVATE_KEY
+});
+```
+
+Mainnet writes are blocked by default. To opt in:
+
+```ts
+const claw = new ClawCommit({
+  contractAddress: '0xYourMainnetContractAddress',
+  rpcUrl: 'https://bsc-dataseed.binance.org/',
+  privateKey: process.env.PRIVATE_KEY,
+  allowMainnetWrites: true
 });
 ```
 
@@ -40,12 +51,12 @@ const commit = await claw.commit(payload);
 
 ## Reveal
 ```ts
-await claw.reveal(Number(commit.commitId), payload, commit.nonce);
+await claw.reveal(commit.commitId, payload, commit.nonce);
 ```
 
 ## Verify
 ```ts
-const proof = await claw.verify(Number(commit.commitId));
+const proof = await claw.verify(commit.commitId);
 console.log(proof.verified);
 ```
 

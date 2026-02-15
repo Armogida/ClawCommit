@@ -34,6 +34,14 @@
           "rpc_url": {
             "type": "string",
             "description": "Optional BSC RPC endpoint URL."
+          },
+          "allow_mainnet_writes": {
+            "type": "boolean",
+            "description": "Set true to allow state-changing operations on BSC mainnet."
+          },
+          "log_sensitive": {
+            "type": "boolean",
+            "description": "Set true to include prompt/output/nonce in logs and responses."
           }
         },
         "required": ["prompt", "output", "model_version", "contract_address", "private_key"]
@@ -79,6 +87,14 @@
           "rpc_url": {
             "type": "string",
             "description": "Optional BSC RPC endpoint URL."
+          },
+          "allow_mainnet_writes": {
+            "type": "boolean",
+            "description": "Set true to allow state-changing operations on BSC mainnet."
+          },
+          "log_sensitive": {
+            "type": "boolean",
+            "description": "Set true to include prompt/output/nonce in logs and responses."
           }
         },
         "required": ["commit_id", "prompt", "output", "model_version", "nonce", "contract_address", "private_key"]
@@ -104,6 +120,10 @@
           "rpc_url": {
             "type": "string",
             "description": "Optional BSC RPC endpoint URL."
+          },
+          "log_sensitive": {
+            "type": "boolean",
+            "description": "Set true to include prompt/output/nonce in responses."
           }
         },
         "required": ["commit_id", "contract_address"]
@@ -141,6 +161,10 @@
           "rpc_url": {
             "type": "string",
             "description": "Optional BSC RPC endpoint URL."
+          },
+          "log_sensitive": {
+            "type": "boolean",
+            "description": "Set true to include prompt/output/nonce in responses."
           }
         },
         "required": ["prompt", "output", "model_version", "nonce"]

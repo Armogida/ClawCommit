@@ -60,24 +60,32 @@ npx hardhat run scripts/deploy.ts --network bsc
 ### 2. Commit
 
 ```bash
-HARDHAT_NETWORK=bsc npx ts-node scripts/commit.ts \
+HARDHAT_NETWORK=bscTestnet npx ts-node scripts/commit.ts \
   --contract <CONTRACT_ADDRESS> \
   --prompt "Should we rebalance treasury?" \
   --output "APPROVE_REBALANCE" \
   --model-version "clawcommit-v2.0" \
-  --nonce "example-nonce-123"
+  --nonce "0x<32-byte-hex-nonce>" \
+  --log-sensitive true
 ```
 
 ### 3. Reveal
 
 ```bash
-HARDHAT_NETWORK=bsc npx ts-node scripts/reveal.ts \
+HARDHAT_NETWORK=bscTestnet npx ts-node scripts/reveal.ts \
   --contract <CONTRACT_ADDRESS> \
   --commit-id 0 \
   --prompt "Should we rebalance treasury?" \
   --output "APPROVE_REBALANCE" \
   --model-version "clawcommit-v2.0" \
-  --nonce "example-nonce-123"
+  --nonce "0x<32-byte-hex-nonce>" \
+  --log-sensitive true
+```
+
+For BSC mainnet writes, add:
+
+```bash
+--allow-mainnet-writes true
 ```
 
 ### 4. Replay Validator (Standalone)
@@ -153,7 +161,7 @@ npx hardhat run scripts/batch/deployBatch.ts --network bsc
 Then commit:
 
 ```bash
-HARDHAT_NETWORK=bsc npx ts-node scripts/batch/commitBatch.ts \
+HARDHAT_NETWORK=bscTestnet npx ts-node scripts/batch/commitBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --manifest artifacts/batches/batch-001.manifest.json
 ```
@@ -161,7 +169,7 @@ HARDHAT_NETWORK=bsc npx ts-node scripts/batch/commitBatch.ts \
 ### Read committed batch
 
 ```bash
-HARDHAT_NETWORK=bsc npx ts-node scripts/batch/getBatch.ts \
+HARDHAT_NETWORK=bscTestnet npx ts-node scripts/batch/getBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --batch-id 0
 ```
@@ -224,10 +232,10 @@ and writes a clean transcript to:
    - `BSCSCAN_API_KEY`
 2. Run:
    - `npm install && npx hardhat compile && npm test`
-   - `npx hardhat run scripts/deploy.ts --network bsc`
+   - `npx hardhat run scripts/deploy.ts --network bscTestnet`
    - commit + reveal using scripts above
    - `npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH>`
-   - `npx hardhat run scripts/verifyContract.ts --network bsc -- --address <CONTRACT_ADDRESS>`
+   - `npx hardhat run scripts/verifyContract.ts --network bsc -- --address <CONTRACT_ADDRESS>` (mainnet)
 3. Persist values in `deployment-proof/` and `bsc.address`.
 
 ## Transparency
@@ -263,15 +271,15 @@ Any person can verify any ClawCommit commitment independently. No wallet needed.
 ### Verify by Reveal Transaction Hash
 
 ```bash
-npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH>
+npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH> --rpc <BSC_RPC_URL>
 ```
 
 Validator steps:
 1. Read the commitment data from BSC (public, free)
 2. Decode reveal payload (`prompt/output/modelVersion/nonce`)
 3. Recompute `keccak256(abi.encode(prompt, output, modelVersion, nonce))` locally
-3. Compare against the stored hash
-4. If match → decision is cryptographically proven authentic
+4. Compare against the stored hash
+5. If match → decision is cryptographically proven authentic
 
 ## Hackathon Submission Compliance
 
@@ -287,7 +295,7 @@ Validator steps:
 - **Reproduction Steps**:
   1. `git clone https://github.com/Armogida/ClawCommit.git && cd ClawCommit`
   2. `npm install && npx hardhat compile`
-  3. `npm test` — 56 tests pass
+  3. `npm test`
   4. `npx hardhat run scripts/deployAndProve.ts` — full proof cycle locally
   5. For BSC: `cp .env.example .env` → add keys → `npm run deploy:mainnet`
 

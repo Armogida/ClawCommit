@@ -17,6 +17,8 @@ Commit/reveal payload inputs:
 Optional:
 - `rpc-url`
 - `private-key` (required for commit/reveal)
+- `allow-mainnet-writes` (defaults to `false`)
+- `log-sensitive` (defaults to `false`)
 
 ## Example: Commit
 ```yaml
@@ -29,6 +31,8 @@ Optional:
     model-version: "deploy-agent-v2.1"
     contract-address: ${{ secrets.CLAW_CONTRACT }}
     private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+    allow-mainnet-writes: "true" # required for BSC mainnet writes
+    log-sensitive: "false"
 ```
 
 ## Example: Reveal
@@ -60,3 +64,7 @@ Action computes:
 ```text
 keccak256(abi.encode(prompt, output, modelVersion, nonce))
 ```
+
+## Security Defaults
+- Commit/reveal on BSC mainnet are blocked unless `allow-mainnet-writes: "true"` is set.
+- Prompt/output/nonce are redacted in logs unless `log-sensitive: "true"` is set.

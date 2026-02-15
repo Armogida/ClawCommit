@@ -16,7 +16,7 @@ Run locally with no blockchain:
   npm install && npx hardhat compile && npm test
   npx hardhat run scripts/deployAndProve.ts
 
-All 56 tests pass. Full commit-reveal-verify cycle works on local Hardhat network.
+All tests pass locally. Full commit-reveal-verify cycle works on local Hardhat network.
 
 ## How to Verify After Mainnet Deployment
-  npx hardhat run scripts/replay.ts --network bscMainnet -- --contract <ADDRESS> --commit-id 0
+  npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH> --rpc <BSC_RPC_URL>

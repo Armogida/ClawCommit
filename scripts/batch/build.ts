@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { buildManifest, parseDecisionNdjson } from "./merkle";
+import {
+  buildManifest,
+  canonicalizeManifest,
+  computeManifestHash,
+  parseDecisionNdjson,
+  toCanonicalManifest,
+} from "./merkle";
 
 interface BuildArgs {
   inputPath: string;
@@ -37,7 +43,8 @@ async function main(): Promise<void> {
   const raw = fs.readFileSync(inputPath, "utf8");
   const decisions = parseDecisionNdjson(raw);
 
-  const manifest = buildManifest(decisions, modelVersion);
+  const manifest = toCanonicalManifest(buildManifest(decisions, modelVersion));
+  const manifestHash = computeManifestHash(manifest);
 
   ensureParentDir(outputPath);
   fs.writeFileSync(outputPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -47,6 +54,8 @@ async function main(): Promise<void> {
   console.log("Output:", outputPath);
   console.log("Leaf count:", manifest.leafCount);
   console.log("Root:", manifest.root);
+  console.log("Canonical manifest hash:", manifestHash);
+  console.log("Canonical JSON bytes:", canonicalizeManifest(manifest).length);
 }
 
 main().catch((error) => {

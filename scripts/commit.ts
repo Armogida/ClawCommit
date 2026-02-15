@@ -1,5 +1,13 @@
 import { ethers } from "hardhat";
 import { randomBytes } from "crypto";
+import {
+  assertMainnetWriteAllowed,
+  formatSensitive,
+  isCanonicalHexNonce,
+  normalizeNonce,
+  parseBooleanFlag,
+  requireAddress,
+} from "./common/safety";
 
 interface CommitArgs {
   contract: string;
@@ -7,6 +15,8 @@ interface CommitArgs {
   output: string;
   modelVersion: string;
   nonce?: string;
+  allowMainnetWrites: boolean;
+  logSensitive: boolean;
 }
 
 function parseArgs(): CommitArgs {
@@ -21,15 +31,25 @@ function parseArgs(): CommitArgs {
   const output = get("--output");
   const modelVersion = get("--model-version");
   const nonce = get("--nonce");
+  const allowMainnetWrites = parseBooleanFlag(args, "--allow-mainnet-writes");
+  const logSensitive = parseBooleanFlag(args, "--log-sensitive");
 
   if (!contract || !prompt || !output || !modelVersion) {
     console.error(
-      "Usage: npx hardhat run scripts/commit.ts --network <NETWORK> -- --contract <ADDR> --prompt <PROMPT> --output <OUTPUT> --model-version <MODEL_VERSION> [--nonce <NONCE>]"
+      "Usage: npx hardhat run scripts/commit.ts --network <NETWORK> -- --contract <ADDR> --prompt <PROMPT> --output <OUTPUT> --model-version <MODEL_VERSION> [--nonce <NONCE>] [--allow-mainnet-writes <true|false>] [--log-sensitive <true|false>]"
     );
     process.exit(1);
   }
 
-  return { contract, prompt, output, modelVersion, nonce };
+  return {
+    contract: requireAddress(contract, "--contract"),
+    prompt,
+    output,
+    modelVersion,
+    nonce,
+    allowMainnetWrites,
+    logSensitive,
+  };
 }
 
 async function main(): Promise<void> {
@@ -39,8 +59,23 @@ async function main(): Promise<void> {
     output,
     modelVersion,
     nonce: providedNonce,
+    allowMainnetWrites,
+    logSensitive,
   } = parseArgs();
-  const nonce = providedNonce || randomBytes(16).toString("hex");
+  if (!providedNonce && !logSensitive) {
+    throw new Error(
+      "Auto-generated nonce would be redacted. Provide --nonce explicitly or set --log-sensitive true."
+    );
+  }
+  const nonce = normalizeNonce(providedNonce || ethers.hexlify(randomBytes(32)));
+  if (!isCanonicalHexNonce(nonce)) {
+    console.warn(
+      "Warning: nonce is not canonical 32-byte hex (0x + 64 hex chars). Continue only if this is intentional."
+    );
+  }
+
+  const chainId = (await ethers.provider.getNetwork()).chainId;
+  assertMainnetWriteAllowed(chainId, allowMainnetWrites, "commit script");
 
   const ClawCommit = await ethers.getContractFactory("ClawCommit");
   const contract = ClawCommit.attach(contractAddress);
@@ -51,11 +86,14 @@ async function main(): Promise<void> {
   );
   const hash = ethers.keccak256(encoded);
 
-  console.log("Prompt:       ", prompt);
-  console.log("Output:       ", output);
+  console.log("Prompt:       ", formatSensitive(prompt, logSensitive));
+  console.log("Output:       ", formatSensitive(output, logSensitive));
   console.log("Model Version:", modelVersion);
-  console.log("Nonce:        ", nonce);
+  console.log("Nonce:        ", formatSensitive(nonce, logSensitive));
   console.log("Hash:         ", hash);
+  if (!logSensitive) {
+    console.log("Sensitive fields are redacted. Use --log-sensitive true in trusted environments.");
+  }
   console.log("");
 
   const tx = await contract.commitDecision(hash);
@@ -79,10 +117,14 @@ async function main(): Promise<void> {
   }
 
   console.log("");
-  console.log("Save these values for reveal:");
-  console.log(
-    `  --commit-id <ID> --prompt "${prompt}" --output "${output}" --model-version "${modelVersion}" --nonce "${nonce}"`
-  );
+  if (logSensitive) {
+    console.log("Save these values for reveal:");
+    console.log(
+      `  --commit-id <ID> --prompt "${prompt}" --output "${output}" --model-version "${modelVersion}" --nonce "${nonce}"`
+    );
+  } else {
+    console.log("Reveal arguments are not printed because sensitive logging is disabled.");
+  }
 }
 
 main()
