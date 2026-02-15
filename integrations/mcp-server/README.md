@@ -17,12 +17,22 @@ MCP server for ClawCommit v2 commit-reveal flows on BNB Chain.
 - `clawcommit_openclaw_build_payload`
 - `clawcommit_openclaw_commit`
 - `clawcommit_openclaw_reveal`
+- `clawcommit_openclaw_gemini_build_payload`
+- `clawcommit_openclaw_gemini_commit`
+- `clawcommit_openclaw_gemini_reveal`
+- `clawcommit_openclaw_gemini_query_audit_trail`
 
 ## Hash Model
 All tools use:
 
 ```text
 keccak256(abi.encode(prompt, output, modelVersion, nonce))
+```
+
+Gemini tools also output an expanded attestation hash:
+
+```text
+keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))
 ```
 
 ## Tool Parameters

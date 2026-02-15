@@ -6,10 +6,18 @@ import GeminiAdapter, {
   GeminiPreparedDecision,
 } from "./GeminiAdapter";
 
+interface GoogleModelLike {
+  generateContent: (request: unknown) => Promise<unknown>;
+}
+
+interface GoogleClientLike {
+  getGenerativeModel: (args: { model: string; tools?: unknown[] }) => GoogleModelLike;
+}
 export interface GeminiProviderOptions {
   claw: ClawCommit;
   apiKey: string;
   adapterOptions?: GeminiAdapterOptions;
+  googleClient?: GoogleClientLike;
 }
 
 export interface GeminiGenerateRequest {
@@ -17,6 +25,7 @@ export interface GeminiGenerateRequest {
   modelVersion?: string;
   generationConfig?: GeminiGenerationConfig;
   nonce?: string;
+  tools?: unknown[];
 }
 
 export interface GeminiGenerateAndCommitResult {
@@ -25,14 +34,6 @@ export interface GeminiGenerateAndCommitResult {
   commit: CommitResult;
   prepared: GeminiPreparedDecision;
   rawResponse: unknown;
-}
-
-interface GoogleModelLike {
-  generateContent: (request: unknown) => Promise<unknown>;
-}
-
-interface GoogleClientLike {
-  getGenerativeModel: (args: { model: string }) => GoogleModelLike;
 }
 
 async function loadGoogleClient(apiKey: string): Promise<GoogleClientLike> {
@@ -52,26 +53,43 @@ async function loadGoogleClient(apiKey: string): Promise<GoogleClientLike> {
   }
 }
 
-function extractText(response: unknown): string {
-  const candidateText =
-    (response as {
-      response?: {
-        text?: () => string;
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }> };
-      };
-    })?.response?.text?.() || "";
+function extractOutput(response: unknown): string {
+  const resp = (response as { response?: any })?.response;
+  if (!resp) return "";
 
-  if (candidateText.trim()) {
-    return candidateText.trim();
+  if (resp.text && typeof resp.text === "function") {
+    const text = resp.text();
+    if (text) return text.trim();
   }
 
-  const fallback =
-    (response as {
-      response?: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }> };
-      };
-    })?.response?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n") || "";
+  const candidates = resp.candidates;
+  if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
+    return "";
+  }
 
-  return fallback.trim();
+  const candidate = candidates[0];
+  if (
+    !candidate ||
+    !candidate.content ||
+    !Array.isArray(candidate.content.parts) ||
+    candidate.content.parts.length === 0
+  ) {
+    return "";
+  }
+
+  const parts = candidate.content.parts;
+  const functionCalls = parts
+    .map((part: any) => part.functionCall)
+    .filter(Boolean);
+
+  if (functionCalls.length > 0) {
+    return JSON.stringify({ tool_calls: functionCalls });
+  }
+
+  return parts
+    .map((part: any) => part.text || "")
+    .join("\n")
+    .trim();
 }
 
 export class GeminiProvider {
@@ -82,7 +100,9 @@ export class GeminiProvider {
   constructor(options: GeminiProviderOptions) {
     this.claw = options.claw;
     this.adapter = new GeminiAdapter(options.adapterOptions);
-    this.clientPromise = loadGoogleClient(options.apiKey);
+    this.clientPromise = options.googleClient
+      ? Promise.resolve(options.googleClient)
+      : loadGoogleClient(options.apiKey);
   }
 
   public getAdapter(): GeminiAdapter {
@@ -94,9 +114,13 @@ export class GeminiProvider {
   ): Promise<GeminiGenerateAndCommitResult> {
     const modelVersion = request.modelVersion || "gemini-1.5-pro";
     const generationConfig = request.generationConfig || {};
+    const tools = request.tools || [];
 
     const client = await this.clientPromise;
-    const model = client.getGenerativeModel({ model: modelVersion });
+    const model = client.getGenerativeModel({
+      model: modelVersion,
+      tools,
+    });
 
     const rawResponse = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: request.prompt }] }],
@@ -109,9 +133,11 @@ export class GeminiProvider {
       safetySettings: generationConfig.safetySettings,
     });
 
-    const output = extractText(rawResponse);
+    const output = extractOutput(rawResponse);
     if (!output) {
-      throw new Error("Gemini returned an empty response; refusing to commit empty output");
+      throw new Error(
+        "Gemini returned an empty response; refusing to commit empty output"
+      );
     }
 
     const prepared: GeminiPreparedDecision = this.adapter.prepareDecision({
@@ -119,7 +145,8 @@ export class GeminiProvider {
       output,
       modelVersion,
       nonce: request.nonce,
-      generationConfig,
+      generationConfig: { ...generationConfig, tools },
+      tools,
     } as GeminiDecisionInput);
 
     const commit = await this.claw.commit(

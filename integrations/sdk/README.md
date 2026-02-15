@@ -101,6 +101,43 @@ Deterministic guarantees:
 - prompt template is fixed and versioned
 - output is `OPENCLAW_REJECT` if any required validation fails, else `OPENCLAW_APPROVE`
 
+## Gemini Native Helpers
+
+Gemini helpers normalize generation metadata into a canonical prompt envelope,
+then use the existing commit/reveal API without changing contract compatibility.
+
+```ts
+import {
+  ClawCommit,
+  buildGeminiDecisionPayload,
+  commitGeminiDecision,
+  revealGeminiDecision
+} from "@clawcommit/sdk";
+
+const input = {
+  prompt: "Audit this PR for release safety",
+  output: "OPENCLAW_APPROVE",
+  modelVersion: "gemini-1.5-pro",
+  generationConfig: {
+    temperature: 0.2,
+    topP: 0.95,
+    candidateCount: 1,
+    stopSequences: ["END_AUDIT"],
+    safetySettings: [
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+    ]
+  }
+};
+
+const payload = buildGeminiDecisionPayload(input, "0x" + "11".repeat(32));
+const commit = await commitGeminiDecision(claw, input, "0x" + "11".repeat(32));
+await revealGeminiDecision(claw, commit.commitId, payload, commit.nonce);
+```
+
+Expanded attestation hash exposed by payload:
+
+`keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))`
+
 ## Static Hash Utility
 ```ts
 const { hash, nonce } = ClawCommit.computeDecisionHash(payload);

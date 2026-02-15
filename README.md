@@ -323,6 +323,15 @@ Optional custom RPC:
 npx ts-node scripts/replay.ts --tx 0xREVEAL_TX_HASH --rpc https://bsc-dataseed.binance.org/
 ```
 
+Gemini input-integrity mode:
+
+```bash
+npx ts-node scripts/replay.ts --tx 0xREVEAL_TX_HASH --model gemini-1.5-pro
+```
+
+In Gemini mode, replay verifies commit/reveal integrity and canonical metadata integrity.
+It does not require deterministic token-level regeneration of the model output.
+
 On success it prints:
 
 ```text
@@ -357,6 +366,22 @@ Merkle parent formula:
 `keccak256(abi.encode(left, right))`
 
 Odd-width levels duplicate the last node.
+
+## Gemini Native Support
+
+First-class Gemini support now lives in `integrations/openclaw/`:
+
+- `GeminiAdapter.ts`: canonical Gemini prompt envelope + nonce strategy (`random` or `counter`).
+- `GeminiProvider.ts`: TypeScript wrapper to call Gemini and commit before returning output.
+- `gemini_provider.py`: Python wrapper with the same conversion + decision-cycle flow.
+- `.github/workflows/gemini-pr-audit.yml`: PR workflow that runs Gemini audit, commits on testnet, and comments explorer links.
+
+Expanded Gemini attestation hash:
+
+`keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))`
+
+`candidateCount`, `stopSequences`, and `safetySettings` are normalized into the canonical prompt envelope
+so they remain covered by on-chain replay verification with the existing contract interface.
 
 ### Build a batch manifest from NDJSON
 

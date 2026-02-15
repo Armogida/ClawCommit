@@ -159,7 +159,7 @@ async function testGeminiTooling() {
   assert.strictEqual(buildPayload.success, true);
   assert.strictEqual(buildPayload.modelVersion, "gemini-1.5-pro");
   assert.strictEqual(buildPayload.generationConfig.candidateCount, 2);
-  assert.match(buildPayload.prompt, /openclaw\\.gemini\\.template=/);
+  assert.match(buildPayload.prompt, /openclaw\.gemini\.template=/);
   assert.strictEqual(
     buildPayload.expandedAlgorithm,
     "keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))"

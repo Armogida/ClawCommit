@@ -7,6 +7,10 @@ This folder provides a local OpenClaw integration layer for ClawCommit.
 - `openclaw.js`: thin wrapper around `skills/operate-clawcommit/scripts/decision_cycle.sh`
 - `openclaw-decision.schema.json`: provider-neutral decision log schema
 - `convert-to-clawcommit.js`: schema validator + converter for agent logs
+- `gemini-utils.js`: canonical Gemini payload normalizer + hash helpers
+- `GeminiAdapter.ts`: TypeScript adapter for Gemini prompt envelope + nonce strategy
+- `GeminiProvider.ts`: TypeScript wrapper that can call Gemini and commit before returning
+- `gemini_provider.py`: Python wrapper that emits Gemini logs and runs decision cycle
 
 ## Decision log schema
 
@@ -24,6 +28,8 @@ Standardized fields required from Claude/Codex/Gemini/OpenClaw runs:
 Optional:
 
 - `metadata` (free-form context map)
+- `provider` (for example `gemini`)
+- `generationConfig` (`temperature`, `topP`, `candidateCount`, `stopSequences`, `safetySettings`)
 
 ## Convert provider log to ClawCommit payload
 
@@ -70,3 +76,15 @@ npm run openclaw:attest -- \
 - Mainnet writes require explicit `--allow-mainnet-writes true` and workflow gating.
 - Link-report prompt rendering is opt-in.
 - Redaction is enabled by default for prompt/output rendering.
+
+## Gemini hashing notes
+
+Gemini logs can include generation metadata. The converter emits:
+
+- On-chain hash input (contract-compatible):
+  - `keccak256(abi.encode(promptEnvelope, output, modelVersion, nonce))`
+- Expanded Gemini hash (off-chain attestation metadata):
+  - `keccak256(abi.encode(promptEnvelope, output, modelVersion, nonce, temperature, topP))`
+
+`candidateCount`, `stopSequences`, and `safetySettings` are normalized into the
+`promptEnvelope` and a `configDigest`, so those fields are still covered by replay verification.

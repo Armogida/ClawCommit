@@ -17,6 +17,7 @@ export interface GeminiGenerationConfig {
   candidateCount?: number;
   stopSequences?: string[];
   safetySettings?: GeminiSafetySetting[];
+  tools?: unknown[];
 }
 
 export interface GeminiNormalizedGenerationConfig {
@@ -26,6 +27,8 @@ export interface GeminiNormalizedGenerationConfig {
   stopSequences: string[];
   safetySettings: GeminiSafetySetting[];
   configDigest: string;
+  toolsDigest: string;
+  tools: unknown[];
 }
 
 export interface GeminiDecisionInput {
@@ -34,6 +37,7 @@ export interface GeminiDecisionInput {
   modelVersion?: string;
   nonce?: string;
   generationConfig?: GeminiGenerationConfig;
+  tools?: unknown[];
 }
 
 export interface GeminiPreparedDecision {
@@ -46,6 +50,7 @@ export interface GeminiPreparedDecision {
   chainHash: string;
   expandedHash: string;
   expandedAlgorithm: string;
+  tools?: unknown[];
 }
 
 export interface GeminiAdapterOptions {
@@ -54,9 +59,12 @@ export interface GeminiAdapterOptions {
   nonceCounterFile?: string;
 }
 
-const GEMINI_TEMPLATE_VERSION = "gemini-context-v1";
+const GEMINI_TEMPLATE_VERSION = "gemini-context-v2-tools";
 
-const GEMINI_PRESETS: Record<GeminiPresetName, Required<GeminiGenerationConfig> & { model: string }> = {
+const GEMINI_PRESETS: Record<
+  GeminiPresetName,
+  Required<GeminiGenerationConfig> & { model: string }
+> = {
   geminiPro: {
     model: "gemini-1.5-pro",
     temperature: 0.2,
@@ -64,6 +72,7 @@ const GEMINI_PRESETS: Record<GeminiPresetName, Required<GeminiGenerationConfig> 
     candidateCount: 1,
     stopSequences: [],
     safetySettings: [],
+    tools: [],
   },
   geminiFlash: {
     model: "gemini-1.5-flash",
@@ -72,6 +81,7 @@ const GEMINI_PRESETS: Record<GeminiPresetName, Required<GeminiGenerationConfig> 
     candidateCount: 1,
     stopSequences: [],
     safetySettings: [],
+    tools: [],
   },
 };
 
@@ -130,7 +140,17 @@ function normalizeSafetySettings(value: unknown): GeminiSafetySetting[] {
     });
 }
 
-function resolvePreset(modelVersion?: string, defaultPreset: GeminiPresetName = "geminiPro") {
+function normalizeTools(value: unknown): unknown[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((tool) => tool && typeof tool === "object");
+}
+
+function resolvePreset(
+  modelVersion?: string,
+  defaultPreset: GeminiPresetName = "geminiPro"
+) {
   const normalized = String(modelVersion || "").toLowerCase();
   if (normalized.includes("flash")) {
     return GEMINI_PRESETS.geminiFlash;
@@ -169,13 +189,22 @@ export class GeminiAdapter {
     const preset = resolvePreset(modelVersion, this.defaultPreset);
     const nextConfig = generationConfig || {};
 
-    const temperature = toDecimalString(nextConfig.temperature, preset.temperature);
+    const temperature = toDecimalString(
+      nextConfig.temperature,
+      preset.temperature
+    );
     const topP = toDecimalString(nextConfig.topP, preset.topP);
-    const candidateCount = toPositiveInt(nextConfig.candidateCount, preset.candidateCount);
-    const stopSequences = normalizeStopSequences(nextConfig.stopSequences || preset.stopSequences);
+    const candidateCount = toPositiveInt(
+      nextConfig.candidateCount,
+      preset.candidateCount
+    );
+    const stopSequences = normalizeStopSequences(
+      nextConfig.stopSequences || preset.stopSequences
+    );
     const safetySettings = normalizeSafetySettings(
       nextConfig.safetySettings || preset.safetySettings
     );
+    const tools = normalizeTools(nextConfig.tools || preset.tools);
 
     const configDigest = keccak256(
       AbiCoder.defaultAbiCoder().encode(
@@ -188,6 +217,10 @@ export class GeminiAdapter {
       )
     );
 
+    const toolsDigest = keccak256(
+      AbiCoder.defaultAbiCoder().encode(["string"], [JSON.stringify(tools)])
+    );
+
     return {
       temperature,
       topP,
@@ -195,6 +228,8 @@ export class GeminiAdapter {
       stopSequences,
       safetySettings,
       configDigest,
+      tools,
+      toolsDigest,
     };
   }
 
@@ -203,19 +238,37 @@ export class GeminiAdapter {
     modelVersion: string,
     normalizedConfig: GeminiNormalizedGenerationConfig
   ): string {
-    return [
+    const envelope = [
       `openclaw.gemini.template=${GEMINI_TEMPLATE_VERSION}`,
       `openclaw.gemini.model=${modelVersion}`,
       `openclaw.gemini.temperature=${normalizedConfig.temperature}`,
       `openclaw.gemini.topP=${normalizedConfig.topP}`,
       `openclaw.gemini.candidateCount=${normalizedConfig.candidateCount}`,
-      `openclaw.gemini.stopSequences=${JSON.stringify(normalizedConfig.stopSequences)}`,
-      `openclaw.gemini.safetySettings=${JSON.stringify(normalizedConfig.safetySettings)}`,
+      `openclaw.gemini.stopSequences=${JSON.stringify(
+        normalizedConfig.stopSequences
+      )}`,
+      `openclaw.gemini.safetySettings=${JSON.stringify(
+        normalizedConfig.safetySettings
+      )}`,
       `openclaw.gemini.configDigest=${normalizedConfig.configDigest}`,
+    ];
+
+    if (normalizedConfig.tools.length > 0) {
+      envelope.push(
+        `openclaw.gemini.toolsDigest=${normalizedConfig.toolsDigest}`
+      );
+      envelope.push(
+        `openclaw.gemini.tools=${JSON.stringify(normalizedConfig.tools)}`
+      );
+    }
+
+    envelope.push(
       "openclaw.gemini.prompt.begin",
       prompt,
-      "openclaw.gemini.prompt.end",
-    ].join("\n");
+      "openclaw.gemini.prompt.end"
+    );
+
+    return envelope.join("\n");
   }
 
   public parsePromptEnvelope(promptEnvelope: string): {
@@ -228,6 +281,8 @@ export class GeminiAdapter {
     safetySettings: GeminiSafetySetting[];
     configDigest: string;
     isGeminiEnvelope: boolean;
+    tools: unknown[];
+    toolsDigest: string;
   } {
     const beginMarker = "\nopenclaw.gemini.prompt.begin\n";
     const endMarker = "\nopenclaw.gemini.prompt.end";
@@ -245,6 +300,8 @@ export class GeminiAdapter {
         safetySettings: [],
         configDigest: "",
         isGeminiEnvelope: false,
+        tools: [],
+        toolsDigest: "",
       };
     }
 
@@ -261,6 +318,8 @@ export class GeminiAdapter {
       safetySettings: [] as GeminiSafetySetting[],
       configDigest: "",
       isGeminiEnvelope: true,
+      tools: [] as unknown[],
+      toolsDigest: "",
     };
 
     for (const line of header) {
@@ -291,6 +350,14 @@ export class GeminiAdapter {
         }
       } else if (key === "openclaw.gemini.configDigest") {
         result.configDigest = value;
+      } else if (key === "openclaw.gemini.toolsDigest") {
+        result.toolsDigest = value;
+      } else if (key === "openclaw.gemini.tools") {
+        try {
+          result.tools = normalizeTools(JSON.parse(value));
+        } catch {
+          result.tools = [];
+        }
       }
     }
 
@@ -336,12 +403,26 @@ export class GeminiAdapter {
   }
 
   public prepareDecision(input: GeminiDecisionInput): GeminiPreparedDecision {
-    const modelVersion = String(input.modelVersion || resolvePreset(undefined, this.defaultPreset).model);
+    const modelVersion = String(
+      input.modelVersion || resolvePreset(undefined, this.defaultPreset).model
+    );
     const nonce = input.nonce || this.nextNonce();
-    const normalizedConfig = this.normalizeGenerationConfig(modelVersion, input.generationConfig);
-    const promptEnvelope = this.buildPromptEnvelope(input.prompt, modelVersion, normalizedConfig);
+    const normalizedConfig = this.normalizeGenerationConfig(modelVersion, {
+      ...input.generationConfig,
+      tools: input.tools,
+    });
+    const promptEnvelope = this.buildPromptEnvelope(
+      input.prompt,
+      modelVersion,
+      normalizedConfig
+    );
 
-    const chainHash = this.computeChainHash(promptEnvelope, input.output, modelVersion, nonce);
+    const chainHash = this.computeChainHash(
+      promptEnvelope,
+      input.output,
+      modelVersion,
+      nonce
+    );
     const expandedHash = this.computeExpandedHash(
       promptEnvelope,
       input.output,
@@ -362,6 +443,7 @@ export class GeminiAdapter {
       expandedHash,
       expandedAlgorithm:
         "keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))",
+      tools: input.tools,
     };
   }
 

@@ -212,6 +212,24 @@ Security defaults:
 - redacted PR comments
 - explicit mainnet opt-in only
 
+### Gemini native extension
+
+Gemini decisions use a canonical prompt envelope so generation metadata remains
+auditable without changing the deployed contract API.
+
+- Expanded attestation hash:
+  - `keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))`
+- Contract-compatible hash (existing onchain path):
+  - `keccak256(abi.encode(promptEnvelope, output, modelVersion, nonce))`
+- Gemini metadata covered by the envelope:
+  - `candidateCount`
+  - `stopSequences`
+  - `safetySettings`
+  - `configDigest` (normalized metadata digest)
+
+Replay for Gemini verifies commit/reveal integrity plus envelope metadata integrity.
+It does not require deterministic model token replay.
+
 ## 8. Merkle Batching (Wave 2)
 
 Wave 2 keeps Wave 1 root commitments and adds multi-leaf reveal writes in one transaction.
