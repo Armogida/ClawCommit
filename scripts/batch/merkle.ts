@@ -134,3 +134,67 @@ export function parseDecisionNdjson(raw: string): DecisionInput[] {
     };
   });
 }
+
+export interface MerkleProof {
+  leafIndex: number;
+  leafHash: string;
+  siblings: string[];
+  path: boolean[]; // true = leaf is on right side, false = leaf is on left side
+}
+
+export function generateMerkleProof(
+  leafHashes: string[],
+  targetIndex: number
+): MerkleProof {
+  if (targetIndex < 0 || targetIndex >= leafHashes.length) {
+    throw new Error(`Target index ${targetIndex} out of range [0, ${leafHashes.length - 1}]`);
+  }
+
+  const siblings: string[] = [];
+  const path: boolean[] = [];
+  let level = [...leafHashes];
+  let idx = targetIndex;
+
+  while (level.length > 1) {
+    const nextLevel: string[] = [];
+    for (let i = 0; i < level.length; i += 2) {
+      const left = level[i];
+      const right = i + 1 < level.length ? level[i + 1] : level[i];
+
+      if (i === idx || i + 1 === idx) {
+        if (idx % 2 === 0) {
+          // target is left child, sibling is right
+          siblings.push(right);
+          path.push(false);
+        } else {
+          // target is right child, sibling is left
+          siblings.push(left);
+          path.push(true);
+        }
+      }
+
+      nextLevel.push(computeParentHash(left, right));
+    }
+    idx = Math.floor(idx / 2);
+    level = nextLevel;
+  }
+
+  return {
+    leafIndex: targetIndex,
+    leafHash: leafHashes[targetIndex],
+    siblings,
+    path,
+  };
+}
+
+export function verifyMerkleProof(proof: MerkleProof, expectedRoot: string): boolean {
+  let computed = proof.leafHash;
+  for (let i = 0; i < proof.siblings.length; i++) {
+    if (proof.path[i]) {
+      computed = computeParentHash(proof.siblings[i], computed);
+    } else {
+      computed = computeParentHash(computed, proof.siblings[i]);
+    }
+  }
+  return computed === expectedRoot;
+}

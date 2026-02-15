@@ -8,6 +8,11 @@ pragma solidity ^0.8.24;
 contract ClawCommitBatch {
     error ZeroRoot();
     error InvalidLeafCount();
+    error OnlyBatchCommitter();
+    error LeafAlreadyRevealed();
+    error LeafIndexOutOfRange();
+    error LeafHashMismatch();
+    error ProofLengthMismatch();
 
     struct BatchCommitment {
         bytes32 merkleRoot;
@@ -18,8 +23,18 @@ contract ClawCommitBatch {
         bytes32 manifestHash;
     }
 
+    struct RevealedLeaf {
+        bytes32 leafHash;
+        string prompt;
+        string output;
+        string nonce;
+        uint256 leafIndex;
+        bool revealed;
+    }
+
     uint256 public batchCount;
     mapping(uint256 => BatchCommitment) public batches;
+    mapping(uint256 => mapping(uint256 => RevealedLeaf)) public revealedLeaves;
 
     event BatchCommitted(
         uint256 indexed batchId,
@@ -29,6 +44,15 @@ contract ClawCommitBatch {
         string modelVersion,
         bytes32 manifestHash,
         uint64 timestamp
+    );
+
+    event BatchLeafRevealed(
+        uint256 indexed batchId,
+        uint256 indexed leafIndex,
+        bytes32 leafHash,
+        address indexed revealer,
+        string prompt,
+        string output
     );
 
     function commitBatch(
@@ -77,5 +101,55 @@ contract ClawCommitBatch {
         uint256 leafIndex
     ) external pure returns (bytes32) {
         return keccak256(abi.encode(prompt, output, modelVersion, nonce, leafIndex));
+    }
+
+    function revealBatchLeaf(
+        uint256 batchId,
+        uint256 leafIndex,
+        string calldata prompt,
+        string calldata output,
+        string calldata nonce
+    ) external {
+        BatchCommitment storage batch = batches[batchId];
+        if (batch.committer != msg.sender) revert OnlyBatchCommitter();
+        if (leafIndex >= batch.leafCount) revert LeafIndexOutOfRange();
+        if (revealedLeaves[batchId][leafIndex].revealed) revert LeafAlreadyRevealed();
+
+        bytes32 leafHash = keccak256(abi.encode(prompt, output, batch.modelVersion, nonce, leafIndex));
+
+        revealedLeaves[batchId][leafIndex] = RevealedLeaf({
+            leafHash: leafHash,
+            prompt: prompt,
+            output: output,
+            nonce: nonce,
+            leafIndex: leafIndex,
+            revealed: true
+        });
+
+        emit BatchLeafRevealed(batchId, leafIndex, leafHash, msg.sender, prompt, output);
+    }
+
+    function getRevealedLeaf(uint256 batchId, uint256 leafIndex) external view returns (RevealedLeaf memory) {
+        return revealedLeaves[batchId][leafIndex];
+    }
+
+    function verifyBatchInclusion(
+        uint256 batchId,
+        bytes32 leafHash,
+        bytes32[] calldata siblings,
+        bool[] calldata path
+    ) external view returns (bool) {
+        if (siblings.length != path.length) revert ProofLengthMismatch();
+
+        bytes32 computed = leafHash;
+        for (uint256 i = 0; i < siblings.length; i++) {
+            if (path[i]) {
+                computed = keccak256(abi.encode(siblings[i], computed));
+            } else {
+                computed = keccak256(abi.encode(computed, siblings[i]));
+            }
+        }
+
+        return computed == batches[batchId].merkleRoot;
     }
 }
