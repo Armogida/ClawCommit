@@ -8,7 +8,35 @@ This directory contains integrations that make ClawCommit accessible to AI agent
 
 ## Available Integrations
 
-### 1. MCP Server (`mcp-server/`)
+### 1. GitHub Copilot (`github-copilot/`)
+
+**Purpose**: Use ClawCommit directly from GitHub Copilot to create tamper-evident logs during AI-assisted development.
+
+**Use Case**: GitHub Copilot users can commit, reveal, and verify decisions directly in their IDE or CLI without leaving their development workflow.
+
+**Key Features**:
+- Native integration with GitHub Copilot via MCP
+- Commit decisions during code review
+- Track AI-assisted development decisions
+- Create blockchain-backed audit trails
+- Seamless VS Code and CLI support
+
+**Quick Start**:
+```bash
+cd ..
+npm run mcp:setup
+# Add configuration to GitHub Copilot settings
+# See github-copilot/QUICKSTART.md for details
+```
+
+**Documentation**:
+- [github-copilot/README.md](./github-copilot/README.md)
+- [github-copilot/QUICKSTART.md](./github-copilot/QUICKSTART.md)
+- [github-copilot/examples/](./github-copilot/examples/)
+
+---
+
+### 2. MCP Server (`mcp-server/`)
 
 **Purpose**: Enable AI assistants to interact with ClawCommit natively during conversations.
 
@@ -34,7 +62,7 @@ npm run mcp:test
 
 ---
 
-### 2. GitHub Action (`github-action/`)
+### 3. GitHub Action (`github-action/`)
 
 **Purpose**: Integrate ClawCommit into CI/CD workflows for automated decision logging.
 
@@ -60,7 +88,7 @@ npm run mcp:test
 
 ---
 
-### 3. TypeScript SDK (`sdk/`)
+### 4. TypeScript SDK (`sdk/`)
 
 **Purpose**: Programmatic access to ClawCommit for custom applications.
 
@@ -96,7 +124,7 @@ await client.reveal(Number(commitId), payload, nonce);
 
 ---
 
-### 4. AI Schemas (`ai-schemas/`)
+### 5. AI Schemas (`ai-schemas/`)
 
 **Purpose**: Structured schemas for AI agents to understand ClawCommit operations.
 
@@ -130,14 +158,14 @@ await client.reveal(Number(commitId), payload, nonce);
 
 ## Integration Comparison
 
-| Feature | MCP Server | GitHub Action | TypeScript SDK | AI Schemas |
-|---------|------------|---------------|----------------|------------|
-| **Primary Use** | AI assistants | CI/CD | Custom apps | AI function calling |
-| **Installation** | npm install | Workflow YAML | npm install | Copy schemas |
-| **Configuration** | .env file | Secrets | Constructor | N/A |
-| **Language** | JavaScript | YAML/JS | TypeScript | JSON |
-| **Blockchain Access** | Direct | Direct | Direct | Via SDK/API |
-| **Best For** | Claude Code | GitHub workflows | Production apps | AI integrations |
+| Feature | GitHub Copilot | MCP Server | GitHub Action | TypeScript SDK | AI Schemas |
+|---------|----------------|------------|---------------|----------------|------------|
+| **Primary Use** | GitHub Copilot | AI assistants | CI/CD | Custom apps | AI function calling |
+| **Installation** | MCP config | npm install | Workflow YAML | npm install | Copy schemas |
+| **Configuration** | Settings JSON | .env file | Secrets | Constructor | N/A |
+| **Language** | Natural language | JavaScript | YAML/JS | TypeScript | JSON |
+| **Blockchain Access** | Via MCP | Direct | Direct | Direct | Via SDK/API |
+| **Best For** | Copilot users | Claude Code | GitHub workflows | Production apps | AI integrations |
 
 ## Common Workflows
 

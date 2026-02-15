@@ -473,6 +473,22 @@ This project uses standard Solidity tooling with Hardhat and ethers.js. The curr
 
 ## MCP Integration Quickstart
 
+ClawCommit provides native Model Context Protocol (MCP) server support for AI assistants including Claude Code, GitHub Copilot, and other MCP-compatible tools.
+
+### For GitHub Copilot
+
+Quick setup for GitHub Copilot integration:
+
+```bash
+npm run mcp:setup
+```
+
+Then add to your GitHub Copilot settings (VS Code or CLI). See:
+- [GitHub Copilot Integration Guide](integrations/github-copilot/README.md)
+- [GitHub Copilot Quickstart](integrations/github-copilot/QUICKSTART.md)
+
+### For Claude Code and Other MCP Clients
+
 For MCP server setup, env configuration, testnet faucet steps, and terminal verification:
 
 - `/Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server/README.md`

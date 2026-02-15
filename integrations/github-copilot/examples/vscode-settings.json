@@ -1,0 +1,15 @@
+{
+  "github.copilot.chat.mcp.servers": {
+    "clawcommit": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/ClawCommit/integrations/mcp-server/index.js"
+      ],
+      "env": {
+        "DEPLOYER_PRIVATE_KEY": "0xYOUR_PRIVATE_KEY_HERE",
+        "BSC_RPC_URL": "https://bsc-dataseed.binance.org/",
+        "BSC_TESTNET_RPC_URL": "https://data-seed-prebsc-1-s1.binance.org:8545/"
+      }
+    }
+  }
+}
