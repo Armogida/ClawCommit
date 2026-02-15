@@ -1,0 +1,29 @@
+{
+  "version": "clawcommit-batch-v1",
+  "modelVersion": "clawcommit-wave2-e2e-20260215101608",
+  "leafCount": 3,
+  "root": "0x95f3eb9b9d7f290e86d43655fbee22d9f5960d854e8265bfb50d1ebbae6b024b",
+  "leaves": [
+    {
+      "leafIndex": 0,
+      "prompt": "Should treasury hedge BTC volatility?",
+      "output": "APPROVE_HEDGE_10_PERCENT",
+      "nonce": "batch-nonce-0001",
+      "leafHash": "0xbb3dd6992e2330c76cca88a8f8c92e698216555da1b25cb9144e59f156d96bc6"
+    },
+    {
+      "leafIndex": 1,
+      "prompt": "Should staking rewards be rebalanced this epoch?",
+      "output": "APPROVE_REWARD_SHIFT",
+      "nonce": "batch-nonce-0002",
+      "leafHash": "0x6290439efef5699801a87d3a4170d22d7182c27a52de7796dd886ea103cf3db4"
+    },
+    {
+      "leafIndex": 2,
+      "prompt": "Should validator set expansion proceed?",
+      "output": "REJECT_FOR_NOW",
+      "nonce": "batch-nonce-0003",
+      "leafHash": "0xda183f325381d71120f62566a28255633b7341636f41ab011c9d0e209abe6e91"
+    }
+  ]
+}

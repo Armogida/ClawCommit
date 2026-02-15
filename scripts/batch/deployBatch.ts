@@ -19,7 +19,6 @@ async function main(): Promise<void> {
 
   const address = await contract.getAddress();
   const txHash = contract.deploymentTransaction()?.hash || "unknown";
-  const chainId = (await ethers.provider.getNetwork()).chainId;
 
   console.log("ClawCommitBatch deployed to:", address);
   console.log("Deployment Tx:", txHash);

@@ -1,0 +1,11 @@
+{
+  "network": "bscTestnet",
+  "contract": "0xF50C6B92d320A3af31AF4b700c749fd873152E47",
+  "manifest": "deployment-proof/wave2-e2e.manifest.json",
+  "modelVersion": "clawcommit-wave2-e2e-20260215101608",
+  "batchId": "0",
+  "deployTx": "0xaecadb23acd36d870e4fd8c5a23a2fd451e75e540a4f66d8d588b8d3c0372434",
+  "commitTx": "0x6556cb0e30ef3d10bec132e2b1fb497eca2534e2e9d914ef26bd3dd60079ded1",
+  "revealTx": "0x17d0269a4699e8b09a425b4fd17cccd31e6649756ede02475d89f16feae912b1",
+  "replayVerified": "true"
+}
