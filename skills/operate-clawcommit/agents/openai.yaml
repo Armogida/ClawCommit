@@ -1,0 +1,4 @@
+interface:
+  display_name: "Operate ClawCommit"
+  short_description: "Run ClawCommit commit-reveal and batch operations"
+  default_prompt: "Use ClawCommit scripts to deploy contracts, commit and reveal decisions, replay-verify results, and produce proof artifacts with concise status summaries."
