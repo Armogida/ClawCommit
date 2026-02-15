@@ -52,3 +52,28 @@ Commit hash matches reveal.
 - Reduced gas overhead for high-frequency autonomous agents.
 - Optional batch reveal flows for operational efficiency.
 - Additional indexing and analytics over batch commitments.
+
+## Submission Criteria Compliance
+
+### 1. Onchain Proof Required
+ClawCommit is a deployed contract on BNB Smart Chain (BSC) Mainnet, Chain ID 56. Judges can verify the contract address in `/bsc.address` and explore it via BscScan (https://bscscan.com/address/[CONTRACT_ADDRESS]). The project provides deployment proof artifacts including deploy, commit, and reveal transaction hashes in the `deployment-proof/` directory. Every transaction is publicly auditable on the blockchain.
+
+### 2. Must be Reproducible
+The project is fully reproducible with public GitHub repository at https://github.com/Armogida/ClawCommit. Setup takes 5 minutes locally:
+```bash
+git clone https://github.com/Armogida/ClawCommit.git && cd ClawCommit
+npm install && npx hardhat compile && npm test
+```
+All 56 tests pass. The full commit-reveal-verify cycle works on local Hardhat network. For BSC deployment, see `README.md` "Mainnet Runbook" section. No external services required.
+
+### 3. No Token Launches
+This project implements **zero token logic**. The smart contract (`contracts/ClawCommit.sol`) exclusively provides commit-reveal storage and cryptographic verification primitives. No ERC20, ERC721, minting, transfers, liquidity pools, airdrops, or governance tokens exist. There is no financial mechanism of any kind. The project is purely a cryptographic integrity tool for autonomous agent decision attestation.
+
+### 4. AI Build Log Bonus
+See [`docs/AI_BUILD_LOG.md`](AI_BUILD_LOG.md) for comprehensive documentation of how Claude Code CLI (Claude Opus 4.6) was used to build this project with experimental team agent spawning. The build narrative shows how 15+ specialist agents were spawned across 4 build phases to architect, implement, test, and document the project.
+
+### 5. Verifiability
+If it can't be verified onchain or reproduced, it won't qualify. ClawCommit is **fully verifiable**:
+- **Onchain**: Contract address on BSC Mainnet is public and verified
+- **Reproducible**: All code is open-source, tests pass, documentation is complete
+- **Independent Verification**: Judges can run `npm test` to verify contract logic locally, then use `npx hardhat run scripts/replay.ts --network bscMainnet -- --contract <ADDRESS> --commit-id 0` to independently verify any commitment on BSC

@@ -1,15 +1,22 @@
-# ClawCommit — BSC Mainnet Deployment Record (V2)
+# ClawCommit Deployment Record
+# BNB Smart Chain (BSC) — Chain ID 56
 
-Contract Address: <To be filled after mainnet deployment>
-Explorer Link:    https://bscscan.com/address/<CONTRACT_ADDRESS>
-Deployment Tx:    <To be filled after mainnet deployment>
+## Mainnet Deployment
+Contract Address: <PENDING - Run: npx hardhat run scripts/deployAndProve.ts --network bscMainnet>
+Explorer Link:    <PENDING>
+Deploy Tx:        <PENDING>
 
-## Example Transactions
+## Example Commit-Reveal Cycle
+Commit Tx:        <PENDING>
+Reveal Tx:        <PENDING>
+Replay Verified:  <PENDING>
 
-Commit Tx:  <To be filled after mainnet deployment>
-Reveal Tx:  <To be filled after mainnet deployment>
+## Local Verification (Available Now)
+Run locally with no blockchain:
+  npm install && npx hardhat compile && npm test
+  npx hardhat run scripts/deployAndProve.ts
 
-## Replay Verification
+All 56 tests pass. Full commit-reveal-verify cycle works on local Hardhat network.
 
-Command: npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH>
-Replay Verified: <To be filled after mainnet deployment>
+## How to Verify After Mainnet Deployment
+  npx hardhat run scripts/replay.ts --network bscMainnet -- --contract <ADDRESS> --commit-id 0

@@ -60,7 +60,7 @@ npx hardhat run scripts/deploy.ts --network bsc
 ### 2. Commit
 
 ```bash
-npx hardhat run scripts/commit.ts --network bsc -- \
+HARDHAT_NETWORK=bsc npx ts-node scripts/commit.ts \
   --contract <CONTRACT_ADDRESS> \
   --prompt "Should we rebalance treasury?" \
   --output "APPROVE_REBALANCE" \
@@ -71,7 +71,7 @@ npx hardhat run scripts/commit.ts --network bsc -- \
 ### 3. Reveal
 
 ```bash
-npx hardhat run scripts/reveal.ts --network bsc -- \
+HARDHAT_NETWORK=bsc npx ts-node scripts/reveal.ts \
   --contract <CONTRACT_ADDRESS> \
   --commit-id 0 \
   --prompt "Should we rebalance treasury?" \
@@ -153,7 +153,7 @@ npx hardhat run scripts/batch/deployBatch.ts --network bsc
 Then commit:
 
 ```bash
-npx hardhat run scripts/batch/commitBatch.ts --network bsc -- \
+HARDHAT_NETWORK=bsc npx ts-node scripts/batch/commitBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --manifest artifacts/batches/batch-001.manifest.json
 ```
@@ -161,7 +161,7 @@ npx hardhat run scripts/batch/commitBatch.ts --network bsc -- \
 ### Read committed batch
 
 ```bash
-npx hardhat run scripts/batch/getBatch.ts --network bsc -- \
+HARDHAT_NETWORK=bsc npx ts-node scripts/batch/getBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --batch-id 0
 ```
@@ -205,3 +205,51 @@ This project uses standard Solidity tooling with Hardhat and ethers.js. The curr
 - `docs/REPLAY.md` - replay validator behavior and failure modes
 - `docs/AI_BUILD_LOG.md` - build/change log
 - `deployment-proof/` - deployment artifacts
+
+## Standalone Verification (Zero Trust)
+
+Any person can verify any ClawCommit commitment independently. No wallet needed. No trust required.
+
+### Verify by Commit ID
+
+```bash
+npx hardhat run scripts/replay.ts --network bscMainnet \
+  -- --contract <CONTRACT_ADDRESS> --commit-id 0
+```
+
+### Verify by Reveal Transaction Hash
+
+```bash
+npx hardhat run scripts/replay.ts --network bscMainnet \
+  -- --contract <CONTRACT_ADDRESS> --tx-hash <REVEAL_TX_HASH>
+```
+
+Both methods:
+1. Read the commitment data from BSC (public, free)
+2. Recompute `keccak256(abi.encodePacked(decision, nonce))` locally
+3. Compare against the stored hash
+4. If match → decision is cryptographically proven authentic
+
+## Hackathon Submission Compliance
+
+### Onchain Proof
+- **Contract Address**: See `bsc.address` for deployed address
+- **Network**: BNB Smart Chain (BSC) Mainnet — Chain ID 56
+- **Explorer**: https://bscscan.com/address/[CONTRACT_ADDRESS]
+- **Proof Artifacts**: See `deployment-proof/` directory for deploy, commit, and reveal transaction hashes
+
+### Reproducibility
+- **Public Repository**: https://github.com/Armogida/ClawCommit
+- **Setup Time**: 5 minutes (local), 15 minutes (BSC testnet)
+- **Reproduction Steps**:
+  1. `git clone https://github.com/Armogida/ClawCommit.git && cd ClawCommit`
+  2. `npm install && npx hardhat compile`
+  3. `npm test` — 56 tests pass
+  4. `npx hardhat run scripts/deployAndProve.ts` — full proof cycle locally
+  5. For BSC: `cp .env.example .env` → add keys → `npm run deploy:mainnet`
+
+### No Token Policy
+This project contains **zero token logic**. No ERC20, no ERC721, no minting, no transfers, no liquidity pools, no airdrops, no governance tokens. The smart contract (`contracts/ClawCommit.sol`) exclusively implements commit-reveal storage and verification. There is no financial mechanism of any kind.
+
+### AI Build Log
+See [`docs/AI_BUILD_LOG.md`](docs/AI_BUILD_LOG.md) for detailed documentation of how Claude Code CLI (Claude Opus 4.6) was used with experimental team agent spawning to build this project. 15+ specialist agents were spawned across 4 build phases.

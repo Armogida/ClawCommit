@@ -112,14 +112,14 @@ npx hardhat run scripts/deploy.ts --network bsc
 ### Commit / reveal
 
 ```bash
-npx hardhat run scripts/commit.ts --network bsc -- \
+HARDHAT_NETWORK=bsc npx ts-node scripts/commit.ts \
   --contract <CONTRACT_ADDRESS> \
   --prompt "Should we rebalance treasury?" \
   --output "APPROVE_REBALANCE" \
   --model-version "clawcommit-v2.0" \
   --nonce "nonce-123"
 
-npx hardhat run scripts/reveal.ts --network bsc -- \
+HARDHAT_NETWORK=bsc npx ts-node scripts/reveal.ts \
   --contract <CONTRACT_ADDRESS> \
   --commit-id <ID> \
   --prompt "Should we rebalance treasury?" \
@@ -198,11 +198,11 @@ npx ts-node scripts/batch/build.ts \
 npx ts-node scripts/batch/recomputeRoot.ts \
   --manifest artifacts/batches/batch-001.manifest.json
 
-npx hardhat run scripts/batch/commitBatch.ts --network bsc -- \
+HARDHAT_NETWORK=bsc npx ts-node scripts/batch/commitBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --manifest artifacts/batches/batch-001.manifest.json
 
-npx hardhat run scripts/batch/getBatch.ts --network bsc -- \
+HARDHAT_NETWORK=bsc npx ts-node scripts/batch/getBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --batch-id 0
 ```
