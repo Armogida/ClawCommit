@@ -1,3 +1,72 @@
+Modern AI agents aren't just answering questions anymore. They're writing, reviewing, merging, and deploying code that underpins vital systems - finance platforms, healthcare backends, compliance engines, and critical infrastructure.
+
+When a coding agent approves a pull request or triggers a production deployment, that decision can move real money, affect real users, and alter real systems.
+
+But there's a problem.
+
+Those decisions are logged in mutable files under operator control. There is no independent, cryptographic proof that a pull-request approval, a deployment trigger, or a treasury rebalance wasn't altered after the fact.
+
+Logs can be edited. Databases can be rewritten. Screenshots can be faked.
+
+Until now.
+
+ClawCommit turns AI decisions into cryptographic commitments.
+
+It implements a deterministic commit-reveal protocol on BNB Chain:
+
+1. The agent computes:
+   `keccak256(abi.encode(prompt, output, modelVersion, nonce))`
+2. The resulting hash is committed on-chain.
+3. Later, the agent reveals the full decision data.
+4. Anyone can recompute the hash and verify it matches the on-chain commitment.
+
+If the hashes match, the decision is cryptographically proven to be unchanged since commitment time.  
+If they don't match, tampering is immediately detectable.
+
+The result is a tamper-evident audit trail for AI decisions - whether that's:
+
+- Approving a PR
+- Promoting a container to production
+- Flagging a compliance issue
+- Executing a treasury rebalance
+
+No API keys. No centralized trust. Just math.
+
+And here's the meta-twist.
+
+ClawCommit itself was built by AI.
+
+Using Claude Code CLI's experimental team-spawning feature, a lead orchestrator agent spun up 15+ specialist agents working in parallel across four build phases:
+
+- Smart contracts
+- TypeScript backend + SDK
+- Integrations (MCP server, GitHub Actions, schemas)
+- Documentation and testing
+
+What would normally require about 40 hours of sequential human work was compressed into about 4 hours of parallel AI execution.
+
+The result:
+
+- 64+ files generated
+- ~4,200+ lines of code
+- 56 passing tests across 8 test suites
+- Full commit -> reveal -> replay verification coverage
+- Deterministic standalone replay validator
+- TypeScript SDK, MCP server, GitHub Action, and multi-provider function schemas
+
+This "OpenClaw" build demonstrates two things simultaneously:
+
+1. AI decisions can be made cryptographically tamper-evident.
+2. Orchestrated AI teams can build infrastructure-grade systems faster and more rigorously than traditional sequential workflows.
+
+ClawCommit isn't just infrastructure for verifying AI.
+
+It's proof that AI can build verifiable infrastructure for itself.
+
+Built by agents.  
+For agents.  
+Verified by anyone.
+
 # ClawCommit
 
 Deterministic AI decision commit-reveal protocol with independent replay verification on BNB Chain.
