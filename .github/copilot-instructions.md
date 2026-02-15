@@ -86,7 +86,9 @@ npm test
 
 - **Local (Hardhat)**: `npm run deploy:local`
 - **BSC Testnet**: `npm run deploy:testnet`
-- **BSC Mainnet**: `npm run deploy:mainnet` (requires `--allow-mainnet-writes true` flag)
+- **BSC Mainnet**: Use `npx hardhat run scripts/deploy.ts --network bsc -- --allow-mainnet-writes true`
+  - Note: The `--allow-mainnet-writes true` flag must be passed after `--` separator
+  - The npm script `deploy:mainnet` does not include this flag by default for safety
 
 ### Available NPM Scripts
 
@@ -99,6 +101,22 @@ Key scripts from package.json:
 - `npm run replay` - Replay verification from transaction hash
 - `npm run batch:*` - Batch operation commands (build, commit, reveal, replay)
 - `npm run mcp:*` - MCP server setup and management
+
+**Note on Script Arguments**: When using Hardhat scripts with custom arguments, use the `--` separator:
+```bash
+npx hardhat run scripts/deploy.ts --network bsc -- --allow-mainnet-writes true
+```
+
+When using `ts-node` directly (as shown in README examples):
+```bash
+HARDHAT_NETWORK=bsc npx ts-node scripts/commit.ts \
+  --contract <ADDRESS> \
+  --prompt "..." \
+  --output "..." \
+  --model-version "..." \
+  --nonce "..." \
+  --allow-mainnet-writes true
+```
 
 ## Coding Standards
 
