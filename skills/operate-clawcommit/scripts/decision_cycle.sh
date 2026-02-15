@@ -57,12 +57,30 @@ if [[ ! -f "$repo/package.json" ]]; then
   exit 1
 fi
 
+ts_node_bin="$repo/node_modules/.bin/ts-node"
+if [[ ! -x "$ts_node_bin" ]]; then
+  echo "error: ts-node binary not found at '$ts_node_bin'" >&2
+  echo "hint: run 'npm install' in $repo" >&2
+  exit 1
+fi
+
 if [[ -z "$nonce" ]]; then
   nonce="$(openssl rand -hex 16)"
 fi
 
 if [[ -n "$json_out" ]]; then
   json_out="$(abs_path "$json_out")"
+fi
+
+if [[ -z "$rpc_url" ]]; then
+  case "$network" in
+    bscTestnet)
+      rpc_url="${BSC_TESTNET_RPC_URL:-https://data-seed-prebsc-1-s1.binance.org:8545/}"
+      ;;
+    bsc|bscMainnet)
+      rpc_url="${BSC_RPC_URL:-https://bsc-dataseed.binance.org/}"
+      ;;
+  esac
 fi
 
 echo "[decision-cycle] repo=$repo network=$network"
@@ -74,7 +92,7 @@ replay_log="$(mktemp)"
 trap 'rm -f "$commit_log" "$reveal_log" "$replay_log"' EXIT
 
 commit_cmd=(
-  npx hardhat run scripts/commit.ts --network "$network" --
+  "$ts_node_bin" scripts/commit.ts
   --contract "$contract"
   --prompt "$prompt"
   --output "$output"
@@ -83,7 +101,7 @@ commit_cmd=(
 )
 
 echo "[decision-cycle] committing decision"
-(cd "$repo" && "${commit_cmd[@]}") | tee "$commit_log"
+(cd "$repo" && HARDHAT_NETWORK="$network" "${commit_cmd[@]}") | tee "$commit_log"
 
 commit_id="$(sed -n 's/^Commit ID:[[:space:]]*//p' "$commit_log" | tail -n 1 | tr -d '\r')"
 commit_tx="$(sed -n 's/^Commit Tx:[[:space:]]*//p' "$commit_log" | tail -n 1 | tr -d '\r')"
@@ -94,7 +112,7 @@ if [[ -z "$commit_id" ]]; then
 fi
 
 reveal_cmd=(
-  npx hardhat run scripts/reveal.ts --network "$network" --
+  npx ts-node scripts/reveal.ts
   --contract "$contract"
   --commit-id "$commit_id"
   --prompt "$prompt"
@@ -104,7 +122,7 @@ reveal_cmd=(
 )
 
 echo "[decision-cycle] revealing commit_id=$commit_id"
-(cd "$repo" && "${reveal_cmd[@]}") | tee "$reveal_log"
+(cd "$repo" && HARDHAT_NETWORK="$network" "${reveal_cmd[@]}") | tee "$reveal_log"
 
 reveal_tx="$(sed -n 's/^Reveal Tx:[[:space:]]*//p' "$reveal_log" | tail -n 1 | tr -d '\r')"
 onchain_verify="$(sed -n 's/^On-chain verify:[[:space:]]*//p' "$reveal_log" | tail -n 1 | tr -d '\r')"
@@ -116,7 +134,7 @@ if [[ "$skip_replay" != "true" ]]; then
     exit 1
   fi
 
-  replay_cmd=(npx ts-node scripts/replay.ts --tx "$reveal_tx")
+  replay_cmd=("$ts_node_bin" scripts/replay.ts --tx "$reveal_tx")
   if [[ -n "$rpc_url" ]]; then
     replay_cmd+=(--rpc "$rpc_url")
   fi

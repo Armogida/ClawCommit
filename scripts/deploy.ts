@@ -20,7 +20,6 @@ async function main(): Promise<void> {
 
   const address = await clawCommit.getAddress();
   const deployTxHash = clawCommit.deploymentTransaction()?.hash;
-  const chainId = (await ethers.provider.getNetwork()).chainId;
 
   console.log("ClawCommit deployed to:", address);
   console.log("Deployment Tx:", deployTxHash || "unknown");
