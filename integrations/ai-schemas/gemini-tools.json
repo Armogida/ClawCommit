@@ -42,7 +42,13 @@
           "description": "Set true to include prompt/output/nonce in logs and responses."
         }
       },
-      "required": ["prompt", "output", "model_version", "contract_address", "private_key"]
+      "required": [
+        "prompt",
+        "output",
+        "model_version",
+        "contract_address",
+        "private_key"
+      ]
     }
   },
   {
@@ -92,7 +98,15 @@
           "description": "Set true to include prompt/output/nonce in logs and responses."
         }
       },
-      "required": ["commit_id", "prompt", "output", "model_version", "nonce", "contract_address", "private_key"]
+      "required": [
+        "commit_id",
+        "prompt",
+        "output",
+        "model_version",
+        "nonce",
+        "contract_address",
+        "private_key"
+      ]
     }
   },
   {
@@ -118,7 +132,10 @@
           "description": "Set true to include prompt/output/nonce in responses."
         }
       },
-      "required": ["commit_id", "contract_address"]
+      "required": [
+        "commit_id",
+        "contract_address"
+      ]
     }
   },
   {
@@ -156,7 +173,12 @@
           "description": "Set true to include prompt/output/nonce in responses."
         }
       },
-      "required": ["prompt", "output", "model_version", "nonce"]
+      "required": [
+        "prompt",
+        "output",
+        "model_version",
+        "nonce"
+      ]
     }
   },
   {
@@ -178,7 +200,10 @@
           "description": "Optional BSC RPC endpoint URL."
         }
       },
-      "required": ["commit_id", "contract_address"]
+      "required": [
+        "commit_id",
+        "contract_address"
+      ]
     }
   },
   {
@@ -195,27 +220,55 @@
           "type": "OBJECT",
           "description": "OpenClaw workflow context.",
           "properties": {
-            "workflow": { "type": "STRING" },
-            "repository": { "type": "STRING" },
-            "ref": { "type": "STRING" },
-            "sha": { "type": "STRING" },
-            "actor": { "type": "STRING" },
-            "runId": { "type": "STRING" },
-            "runUrl": { "type": "STRING" }
+            "workflow": {
+              "type": "STRING"
+            },
+            "repository": {
+              "type": "STRING"
+            },
+            "ref": {
+              "type": "STRING"
+            },
+            "sha": {
+              "type": "STRING"
+            },
+            "actor": {
+              "type": "STRING"
+            },
+            "runId": {
+              "type": "STRING"
+            },
+            "runUrl": {
+              "type": "STRING"
+            }
           },
-          "required": ["workflow", "repository"]
+          "required": [
+            "workflow",
+            "repository"
+          ]
         },
         "validations": {
           "type": "ARRAY",
           "items": {
             "type": "OBJECT",
             "properties": {
-              "name": { "type": "STRING" },
-              "passed": { "type": "BOOLEAN" },
-              "required": { "type": "BOOLEAN" },
-              "details": { "type": "STRING" }
+              "name": {
+                "type": "STRING"
+              },
+              "passed": {
+                "type": "BOOLEAN"
+              },
+              "required": {
+                "type": "BOOLEAN"
+              },
+              "details": {
+                "type": "STRING"
+              }
             },
-            "required": ["name", "passed"]
+            "required": [
+              "name",
+              "passed"
+            ]
           }
         },
         "log_sensitive": {
@@ -223,7 +276,11 @@
           "description": "Set true to include full prompt in responses."
         }
       },
-      "required": ["model_version", "context", "validations"]
+      "required": [
+        "model_version",
+        "context",
+        "validations"
+      ]
     }
   },
   {
@@ -232,40 +289,89 @@
     "parameters": {
       "type": "OBJECT",
       "properties": {
-        "model_version": { "type": "STRING" },
+        "model_version": {
+          "type": "STRING"
+        },
         "context": {
           "type": "OBJECT",
           "properties": {
-            "workflow": { "type": "STRING" },
-            "repository": { "type": "STRING" },
-            "ref": { "type": "STRING" },
-            "sha": { "type": "STRING" },
-            "actor": { "type": "STRING" },
-            "runId": { "type": "STRING" },
-            "runUrl": { "type": "STRING" }
+            "workflow": {
+              "type": "STRING"
+            },
+            "repository": {
+              "type": "STRING"
+            },
+            "ref": {
+              "type": "STRING"
+            },
+            "sha": {
+              "type": "STRING"
+            },
+            "actor": {
+              "type": "STRING"
+            },
+            "runId": {
+              "type": "STRING"
+            },
+            "runUrl": {
+              "type": "STRING"
+            }
           },
-          "required": ["workflow", "repository"]
+          "required": [
+            "workflow",
+            "repository"
+          ]
         },
         "validations": {
           "type": "ARRAY",
           "items": {
             "type": "OBJECT",
             "properties": {
-              "name": { "type": "STRING" },
-              "passed": { "type": "BOOLEAN" },
-              "required": { "type": "BOOLEAN" },
-              "details": { "type": "STRING" }
+              "name": {
+                "type": "STRING"
+              },
+              "passed": {
+                "type": "BOOLEAN"
+              },
+              "required": {
+                "type": "BOOLEAN"
+              },
+              "details": {
+                "type": "STRING"
+              }
             },
-            "required": ["name", "passed"]
+            "required": [
+              "name",
+              "passed"
+            ]
           }
         },
-        "nonce": { "type": "STRING" },
-        "contract_address": { "type": "STRING" },
-        "network": { "type": "STRING", "enum": ["bscMainnet", "bscTestnet"] },
-        "allow_mainnet_writes": { "type": "BOOLEAN" },
-        "log_sensitive": { "type": "BOOLEAN" }
+        "nonce": {
+          "type": "STRING"
+        },
+        "contract_address": {
+          "type": "STRING"
+        },
+        "network": {
+          "type": "STRING",
+          "enum": [
+            "bscMainnet",
+            "bscTestnet"
+          ]
+        },
+        "allow_mainnet_writes": {
+          "type": "BOOLEAN"
+        },
+        "log_sensitive": {
+          "type": "BOOLEAN"
+        }
       },
-      "required": ["model_version", "context", "validations", "contract_address"]
+      "required": [
+        "model_version",
+        "context",
+        "validations",
+        "contract_address"
+      ]
     }
   },
   {
@@ -274,39 +380,85 @@
     "parameters": {
       "type": "OBJECT",
       "properties": {
-        "commit_id": { "type": "INTEGER" },
-        "model_version": { "type": "STRING" },
+        "commit_id": {
+          "type": "INTEGER"
+        },
+        "model_version": {
+          "type": "STRING"
+        },
         "context": {
           "type": "OBJECT",
           "properties": {
-            "workflow": { "type": "STRING" },
-            "repository": { "type": "STRING" },
-            "ref": { "type": "STRING" },
-            "sha": { "type": "STRING" },
-            "actor": { "type": "STRING" },
-            "runId": { "type": "STRING" },
-            "runUrl": { "type": "STRING" }
+            "workflow": {
+              "type": "STRING"
+            },
+            "repository": {
+              "type": "STRING"
+            },
+            "ref": {
+              "type": "STRING"
+            },
+            "sha": {
+              "type": "STRING"
+            },
+            "actor": {
+              "type": "STRING"
+            },
+            "runId": {
+              "type": "STRING"
+            },
+            "runUrl": {
+              "type": "STRING"
+            }
           },
-          "required": ["workflow", "repository"]
+          "required": [
+            "workflow",
+            "repository"
+          ]
         },
         "validations": {
           "type": "ARRAY",
           "items": {
             "type": "OBJECT",
             "properties": {
-              "name": { "type": "STRING" },
-              "passed": { "type": "BOOLEAN" },
-              "required": { "type": "BOOLEAN" },
-              "details": { "type": "STRING" }
+              "name": {
+                "type": "STRING"
+              },
+              "passed": {
+                "type": "BOOLEAN"
+              },
+              "required": {
+                "type": "BOOLEAN"
+              },
+              "details": {
+                "type": "STRING"
+              }
             },
-            "required": ["name", "passed"]
+            "required": [
+              "name",
+              "passed"
+            ]
           }
         },
-        "nonce": { "type": "STRING" },
-        "contract_address": { "type": "STRING" },
-        "network": { "type": "STRING", "enum": ["bscMainnet", "bscTestnet"] },
-        "allow_mainnet_writes": { "type": "BOOLEAN" },
-        "log_sensitive": { "type": "BOOLEAN" }
+        "nonce": {
+          "type": "STRING"
+        },
+        "contract_address": {
+          "type": "STRING"
+        },
+        "network": {
+          "type": "STRING",
+          "enum": [
+            "bscMainnet",
+            "bscTestnet"
+          ]
+        },
+        "allow_mainnet_writes": {
+          "type": "BOOLEAN"
+        },
+        "log_sensitive": {
+          "type": "BOOLEAN"
+        }
       },
       "required": [
         "commit_id",
@@ -314,6 +466,224 @@
         "context",
         "validations",
         "nonce",
+        "contract_address"
+      ]
+    }
+  },
+  {
+    "name": "clawcommit_openclaw_gemini_build_payload",
+    "description": "Build deterministic Gemini payload envelope and expanded hash metadata.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "prompt": {
+          "type": "STRING",
+          "description": "Gemini prompt context."
+        },
+        "output": {
+          "type": "STRING",
+          "description": "Gemini output/decision text."
+        },
+        "model_version": {
+          "type": "STRING",
+          "description": "Gemini model version."
+        },
+        "preset": {
+          "type": "STRING",
+          "enum": [
+            "geminiPro",
+            "geminiFlash"
+          ]
+        },
+        "generation_config": {
+          "type": "OBJECT",
+          "description": "Gemini generation config with temperature/topP/candidateCount/stopSequences/safetySettings."
+        },
+        "nonce": {
+          "type": "STRING",
+          "description": "Nonce used for commit/reveal."
+        },
+        "nonce_strategy": {
+          "type": "STRING",
+          "enum": [
+            "random",
+            "counter"
+          ]
+        },
+        "nonce_counter_file": {
+          "type": "STRING",
+          "description": "Optional counter file for nonce_strategy=counter."
+        },
+        "log_sensitive": {
+          "type": "BOOLEAN",
+          "description": "Set true to include prompt/output/nonce in responses."
+        }
+      },
+      "required": [
+        "prompt",
+        "output"
+      ]
+    }
+  },
+  {
+    "name": "clawcommit_openclaw_gemini_commit",
+    "description": "Commit a Gemini decision on-chain with deterministic Gemini metadata envelope.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "prompt": {
+          "type": "STRING",
+          "description": "Gemini prompt context."
+        },
+        "output": {
+          "type": "STRING",
+          "description": "Gemini output/decision text."
+        },
+        "model_version": {
+          "type": "STRING",
+          "description": "Gemini model version."
+        },
+        "preset": {
+          "type": "STRING",
+          "enum": [
+            "geminiPro",
+            "geminiFlash"
+          ]
+        },
+        "generation_config": {
+          "type": "OBJECT",
+          "description": "Gemini generation config with temperature/topP/candidateCount/stopSequences/safetySettings."
+        },
+        "nonce": {
+          "type": "STRING",
+          "description": "Nonce used for commit/reveal."
+        },
+        "nonce_strategy": {
+          "type": "STRING",
+          "enum": [
+            "random",
+            "counter"
+          ]
+        },
+        "nonce_counter_file": {
+          "type": "STRING",
+          "description": "Optional counter file for nonce_strategy=counter."
+        },
+        "contract_address": {
+          "type": "STRING",
+          "description": "ClawCommit contract address."
+        },
+        "network": {
+          "type": "STRING",
+          "enum": [
+            "bscMainnet",
+            "bscTestnet"
+          ]
+        },
+        "allow_mainnet_writes": {
+          "type": "BOOLEAN",
+          "description": "Set true to allow writes on BSC mainnet."
+        },
+        "log_sensitive": {
+          "type": "BOOLEAN",
+          "description": "Set true to include prompt/output/nonce in responses."
+        }
+      },
+      "required": [
+        "prompt",
+        "output",
+        "contract_address"
+      ]
+    }
+  },
+  {
+    "name": "clawcommit_openclaw_gemini_reveal",
+    "description": "Reveal a Gemini commitment by reconstructing the canonical Gemini envelope.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "commit_id": {
+          "type": "INTEGER",
+          "description": "Commitment ID."
+        },
+        "prompt": {
+          "type": "STRING",
+          "description": "Gemini prompt context."
+        },
+        "output": {
+          "type": "STRING",
+          "description": "Gemini output/decision text."
+        },
+        "model_version": {
+          "type": "STRING",
+          "description": "Gemini model version."
+        },
+        "generation_config": {
+          "type": "OBJECT",
+          "description": "Gemini generation config with temperature/topP/candidateCount/stopSequences/safetySettings."
+        },
+        "nonce": {
+          "type": "STRING",
+          "description": "Nonce used for commit/reveal."
+        },
+        "contract_address": {
+          "type": "STRING",
+          "description": "ClawCommit contract address."
+        },
+        "network": {
+          "type": "STRING",
+          "enum": [
+            "bscMainnet",
+            "bscTestnet"
+          ]
+        },
+        "allow_mainnet_writes": {
+          "type": "BOOLEAN",
+          "description": "Set true to allow writes on BSC mainnet."
+        },
+        "log_sensitive": {
+          "type": "BOOLEAN",
+          "description": "Set true to include prompt/output/nonce in responses."
+        }
+      },
+      "required": [
+        "commit_id",
+        "prompt",
+        "output",
+        "model_version",
+        "nonce",
+        "contract_address"
+      ]
+    }
+  },
+  {
+    "name": "clawcommit_openclaw_gemini_query_audit_trail",
+    "description": "Query Gemini-specific audit details for a commitment.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "commit_id": {
+          "type": "INTEGER",
+          "description": "Commitment ID."
+        },
+        "contract_address": {
+          "type": "STRING",
+          "description": "ClawCommit contract address."
+        },
+        "network": {
+          "type": "STRING",
+          "enum": [
+            "bscMainnet",
+            "bscTestnet"
+          ]
+        },
+        "log_sensitive": {
+          "type": "BOOLEAN",
+          "description": "Set true to include prompt/output/nonce in responses."
+        }
+      },
+      "required": [
+        "commit_id",
         "contract_address"
       ]
     }

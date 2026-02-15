@@ -1,4 +1,9 @@
 import { AbiCoder, Contract, Interface, JsonRpcProvider, Provider, keccak256 } from "ethers";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const {
+  computeGeminiDecisionHash,
+  parseGeminiPromptEnvelope,
+} = require("../integrations/openclaw/gemini-utils.js");
 
 const DEFAULT_BSC_RPC = "https://bsc-dataseed.binance.org/";
 
@@ -10,6 +15,7 @@ const CLAW_COMMIT_ABI = [
 export interface ReplayArgs {
   txHash: string;
   rpcUrl: string;
+  model?: string;
 }
 
 export interface DecodedRevealData {
@@ -26,11 +32,25 @@ export interface ReplayVerificationResult {
   recomputedHash: string;
   storedHash: string;
   decodedReveal: DecodedRevealData;
+  modelMode: string;
+  geminiInputIntegrity?: {
+    prompt: string;
+    modelVersion: string;
+    temperature: string;
+    topP: string;
+    candidateCount: number;
+    stopSequences: string[];
+    safetySettings: Array<{ category: string; threshold: string }>;
+    expandedHash: string;
+    configDigest: string;
+    note: string;
+  };
 }
 
 export interface ReplayVerificationOptions {
   rpcUrl?: string;
   provider?: Provider;
+  model?: string;
 }
 
 export function computeDecisionHash(
@@ -77,14 +97,15 @@ export function parseArgs(argv: string[]): ReplayArgs {
 
   const txHash = get("--tx");
   const rpcUrl = get("--rpc") || process.env.BSC_RPC_URL || DEFAULT_BSC_RPC;
+  const model = get("--model");
 
   if (!txHash) {
     throw new Error(
-      "Usage: npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH> [--rpc <RPC_URL>]"
+      "Usage: npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH> [--rpc <RPC_URL>] [--model <MODEL_VERSION>]"
     );
   }
 
-  return { txHash, rpcUrl };
+  return { txHash, rpcUrl, model };
 }
 
 export async function verifyRevealTransaction(
@@ -145,24 +166,81 @@ export async function verifyRevealTransaction(
     );
   }
 
+  const modelMode = String(options?.model || decoded.modelVersion || "").trim();
+  let geminiInputIntegrity: ReplayVerificationResult["geminiInputIntegrity"] | undefined;
+  const shouldInspectGemini =
+    modelMode.toLowerCase().includes("gemini") ||
+    String(decoded.modelVersion || "").toLowerCase().includes("gemini");
+
+  if (shouldInspectGemini) {
+    const parsed = parseGeminiPromptEnvelope(decoded.prompt);
+    if (parsed.isGeminiEnvelope) {
+      const expandedHash = computeGeminiDecisionHash(
+        decoded.prompt,
+        decoded.output,
+        decoded.modelVersion,
+        decoded.nonce,
+        parsed.temperature,
+        parsed.topP
+      );
+
+      geminiInputIntegrity = {
+        prompt: parsed.prompt,
+        modelVersion: parsed.modelVersion || decoded.modelVersion,
+        temperature: parsed.temperature,
+        topP: parsed.topP,
+        candidateCount: parsed.candidateCount,
+        stopSequences: parsed.stopSequences,
+        safetySettings: parsed.safetySettings,
+        expandedHash,
+        configDigest: parsed.configDigest || "",
+        note: "Gemini is non-deterministic; this replay verifies commit/reveal input integrity, not token-for-token regeneration.",
+      };
+    } else {
+      geminiInputIntegrity = {
+        prompt: decoded.prompt,
+        modelVersion: decoded.modelVersion,
+        temperature: "",
+        topP: "",
+        candidateCount: 1,
+        stopSequences: [],
+        safetySettings: [],
+        expandedHash: "",
+        configDigest: "",
+        note: "No Gemini prompt envelope found; standard commit/reveal replay verified.",
+      };
+    }
+  }
+
   return {
     contractAddress: tx.to,
     commitId: decoded.commitId,
     recomputedHash,
     storedHash,
     decodedReveal: decoded,
+    modelMode: modelMode || decoded.modelVersion,
+    geminiInputIntegrity,
   };
 }
 
 async function main(): Promise<void> {
-  const { txHash, rpcUrl } = parseArgs(process.argv.slice(2));
-  const result = await verifyRevealTransaction(txHash, { rpcUrl });
+  const { txHash, rpcUrl, model } = parseArgs(process.argv.slice(2));
+  const result = await verifyRevealTransaction(txHash, { rpcUrl, model });
 
   console.log(`Contract: ${result.contractAddress}`);
   console.log(`Commit ID: ${result.commitId.toString()}`);
   console.log(`Reveal Tx: ${txHash}`);
-  console.log("✓ Deterministic Replay Verified");
-  console.log("Commit hash matches reveal.");
+  if (result.geminiInputIntegrity) {
+    console.log("✓ Gemini Input Integrity Verified");
+    console.log("Commit hash matches reveal (non-deterministic model output replay is not required).");
+    console.log(`Gemini Model: ${result.geminiInputIntegrity.modelVersion}`);
+    console.log(`Temperature: ${result.geminiInputIntegrity.temperature || "n/a"}`);
+    console.log(`TopP: ${result.geminiInputIntegrity.topP || "n/a"}`);
+    console.log(`Expanded Hash: ${result.geminiInputIntegrity.expandedHash || "n/a"}`);
+  } else {
+    console.log("✓ Deterministic Replay Verified");
+    console.log("Commit hash matches reveal.");
+  }
 }
 
 if (require.main === module) {

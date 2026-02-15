@@ -82,6 +82,44 @@ export interface OpenClawDecisionPayload extends DecisionPayload {
   requiredFailureCount: number;
 }
 
+export interface GeminiSafetySetting {
+  category: string;
+  threshold: string;
+}
+
+export interface GeminiGenerationConfig {
+  temperature?: number;
+  topP?: number;
+  candidateCount?: number;
+  stopSequences?: string[];
+  safetySettings?: GeminiSafetySetting[];
+}
+
+export interface GeminiNormalizedGenerationConfig {
+  temperature: string;
+  topP: string;
+  candidateCount: number;
+  stopSequences: string[];
+  safetySettings: GeminiSafetySetting[];
+  configDigest: string;
+}
+
+export interface GeminiDecisionInput {
+  prompt: string;
+  output: string;
+  modelVersion?: string;
+  generationConfig?: GeminiGenerationConfig;
+}
+
+export interface GeminiDecisionPayload extends DecisionPayload {
+  promptTemplateVersion: string;
+  promptDigest: string;
+  inputPrompt: string;
+  generationConfig: GeminiNormalizedGenerationConfig;
+  expandedHash: string;
+  expandedHashAlgorithm: string;
+}
+
 const CLAWCOMMIT_ABI = [
   "function commitDecision(bytes32 _hash) external returns (uint256 commitId)",
   "function revealDecision(uint256 _commitId, string calldata _prompt, string calldata _output, string calldata _modelVersion, string calldata _nonce) external",
@@ -106,6 +144,26 @@ const EXPLORER_URLS = {
 };
 
 export const OPENCLAW_PROMPT_TEMPLATE_VERSION = "openclaw-prompt-v1";
+export const GEMINI_PROMPT_TEMPLATE_VERSION = "gemini-context-v1";
+
+const GEMINI_PRESETS = {
+  geminiPro: {
+    model: "gemini-1.5-pro",
+    temperature: 0.2,
+    topP: 0.95,
+    candidateCount: 1,
+    stopSequences: [] as string[],
+    safetySettings: [] as GeminiSafetySetting[],
+  },
+  geminiFlash: {
+    model: "gemini-1.5-flash",
+    temperature: 0.3,
+    topP: 0.9,
+    candidateCount: 1,
+    stopSequences: [] as string[],
+    safetySettings: [] as GeminiSafetySetting[],
+  },
+} as const;
 
 function requireNonEmptyText(value: string, label: string): string {
   const normalized = value.trim();
@@ -120,6 +178,95 @@ function normalizeOpenClawValidationDetails(details?: string): string {
     return "";
   }
   return details.trim().replace(/\r?\n/g, "\\n");
+}
+
+function normalizeGeminiDecimal(value: number | undefined, fallback: number): string {
+  const numeric = Number(value);
+  const result = Number.isFinite(numeric) ? numeric : fallback;
+  return result
+    .toFixed(6)
+    .replace(/(?:\.0+|(?<=\..*?)0+)$/g, "")
+    .replace(/\.$/, "");
+}
+
+function normalizeGeminiCandidateCount(value: number | undefined, fallback: number): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return Math.max(1, Math.floor(fallback));
+  }
+  return Math.max(1, Math.floor(numeric));
+}
+
+function normalizeGeminiStopSequences(stopSequences?: string[]): string[] {
+  if (!Array.isArray(stopSequences)) {
+    return [];
+  }
+  return [...new Set(stopSequences.map((entry) => String(entry || "").trim()))]
+    .filter((entry) => entry.length > 0)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function normalizeGeminiSafetySettings(
+  safetySettings?: GeminiSafetySetting[]
+): GeminiSafetySetting[] {
+  if (!Array.isArray(safetySettings)) {
+    return [];
+  }
+
+  return safetySettings
+    .map((entry) => ({
+      category: String(entry.category || "").trim(),
+      threshold: String(entry.threshold || "").trim(),
+    }))
+    .filter((entry) => entry.category.length > 0 && entry.threshold.length > 0)
+    .sort((a, b) => {
+      if (a.category < b.category) return -1;
+      if (a.category > b.category) return 1;
+      if (a.threshold < b.threshold) return -1;
+      if (a.threshold > b.threshold) return 1;
+      return 0;
+    });
+}
+
+function resolveGeminiPreset(modelVersion?: string) {
+  const normalized = String(modelVersion || "").toLowerCase();
+  if (normalized.includes("flash")) {
+    return GEMINI_PRESETS.geminiFlash;
+  }
+  return GEMINI_PRESETS.geminiPro;
+}
+
+export function normalizeGeminiGenerationConfig(
+  modelVersion?: string,
+  generationConfig?: GeminiGenerationConfig
+): GeminiNormalizedGenerationConfig {
+  const preset = resolveGeminiPreset(modelVersion);
+  const config = generationConfig || {};
+  const temperature = normalizeGeminiDecimal(config.temperature, preset.temperature);
+  const topP = normalizeGeminiDecimal(config.topP, preset.topP);
+  const candidateCount = normalizeGeminiCandidateCount(
+    config.candidateCount,
+    preset.candidateCount
+  );
+  const stopSequences = normalizeGeminiStopSequences(config.stopSequences || preset.stopSequences);
+  const safetySettings = normalizeGeminiSafetySettings(
+    config.safetySettings || preset.safetySettings
+  );
+  const configDigest = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "string", "string"],
+      [BigInt(candidateCount), JSON.stringify(stopSequences), JSON.stringify(safetySettings)]
+    )
+  );
+
+  return {
+    temperature,
+    topP,
+    candidateCount,
+    stopSequences,
+    safetySettings,
+    configDigest,
+  };
 }
 
 function normalizeOpenClawValidation(
@@ -219,6 +366,78 @@ export function buildOpenClawDecisionPayload(
     validations: sortedValidations,
     requiredValidationCount,
     requiredFailureCount,
+  };
+}
+
+export function computeGeminiExpandedHash(payload: GeminiDecisionPayload, nonce: string): string {
+  const normalizedNonce = normalizeNonce(nonce);
+  const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["string", "string", "string", "string", "string", "string"],
+    [
+      payload.prompt,
+      payload.output,
+      payload.modelVersion,
+      normalizedNonce,
+      payload.generationConfig.temperature,
+      payload.generationConfig.topP,
+    ]
+  );
+  return ethers.keccak256(encoded);
+}
+
+export function buildGeminiDecisionPayload(
+  input: GeminiDecisionInput,
+  nonce?: string
+): GeminiDecisionPayload {
+  const prompt = requireNonEmptyText(input.prompt, "prompt");
+  const output = requireNonEmptyText(input.output, "output");
+  const preset = resolveGeminiPreset(input.modelVersion);
+  const modelVersion = requireNonEmptyText(input.modelVersion || preset.model, "modelVersion");
+  const generationConfig = normalizeGeminiGenerationConfig(modelVersion, input.generationConfig);
+  const nonceForHash = nonce ? normalizeNonce(nonce) : ClawCommit.generateNonce();
+
+  const promptEnvelope = [
+    `openclaw.gemini.template=${GEMINI_PROMPT_TEMPLATE_VERSION}`,
+    `openclaw.gemini.model=${modelVersion}`,
+    `openclaw.gemini.temperature=${generationConfig.temperature}`,
+    `openclaw.gemini.topP=${generationConfig.topP}`,
+    `openclaw.gemini.candidateCount=${generationConfig.candidateCount}`,
+    `openclaw.gemini.stopSequences=${JSON.stringify(generationConfig.stopSequences)}`,
+    `openclaw.gemini.safetySettings=${JSON.stringify(generationConfig.safetySettings)}`,
+    `openclaw.gemini.configDigest=${generationConfig.configDigest}`,
+    "openclaw.gemini.prompt.begin",
+    prompt,
+    "openclaw.gemini.prompt.end",
+  ].join("\n");
+
+  const promptDigest = ethers.keccak256(ethers.toUtf8Bytes(promptEnvelope));
+  const expandedHash = computeGeminiExpandedHash(
+    {
+      prompt: promptEnvelope,
+      output,
+      modelVersion,
+      promptTemplateVersion: GEMINI_PROMPT_TEMPLATE_VERSION,
+      promptDigest,
+      inputPrompt: prompt,
+      generationConfig,
+      expandedHash: "",
+      expandedHashAlgorithm:
+        "keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))",
+    },
+    nonceForHash
+  );
+
+  return {
+    prompt: promptEnvelope,
+    output,
+    modelVersion,
+    promptTemplateVersion: GEMINI_PROMPT_TEMPLATE_VERSION,
+    promptDigest,
+    inputPrompt: prompt,
+    generationConfig,
+    expandedHash,
+    expandedHashAlgorithm:
+      "keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))",
   };
 }
 
@@ -525,6 +744,29 @@ export async function revealOpenClawDecision(
   claw: ClawCommit,
   commitId: CommitIdInput,
   payload: OpenClawDecisionPayload,
+  nonce: string
+): Promise<RevealResult> {
+  return claw.reveal(commitId, payload, nonce);
+}
+
+export async function commitGeminiDecision(
+  claw: ClawCommit,
+  input: GeminiDecisionInput,
+  nonce?: string
+): Promise<CommitResult & { payload: GeminiDecisionPayload }> {
+  const normalizedNonce = nonce ? normalizeNonce(nonce) : ClawCommit.generateNonce();
+  const payload = buildGeminiDecisionPayload(input, normalizedNonce);
+  const commit = await claw.commit(payload, normalizedNonce);
+  return {
+    ...commit,
+    payload,
+  };
+}
+
+export async function revealGeminiDecision(
+  claw: ClawCommit,
+  commitId: CommitIdInput,
+  payload: GeminiDecisionPayload,
   nonce: string
 ): Promise<RevealResult> {
   return claw.reveal(commitId, payload, nonce);

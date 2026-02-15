@@ -5,6 +5,10 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const Ajv2020 = require("ajv/dist/2020").default;
 const addFormats = require("ajv-formats");
+const {
+  buildGeminiCommitPayload,
+  isGeminiModel,
+} = require("./gemini-utils");
 
 function usage() {
   console.log(`Usage:
@@ -187,6 +191,7 @@ function validateOpenClawLog(input, schemaPath) {
 
 function toClawCommitDecision(openclawLog) {
   const {
+    provider,
     sessionId,
     agentId,
     eventType,
@@ -195,8 +200,42 @@ function toClawCommitDecision(openclawLog) {
     output,
     modelVersion,
     nonce,
+    generationConfig,
     metadata,
   } = openclawLog;
+
+  const normalizedProvider = String(provider || "").trim().toLowerCase();
+  const geminiMode = normalizedProvider === "gemini" || isGeminiModel(modelVersion);
+
+  if (geminiMode) {
+    const payload = buildGeminiCommitPayload({
+      prompt,
+      output,
+      modelVersion,
+      nonce,
+      generationConfig,
+    });
+
+    return {
+      prompt: payload.promptEnvelope,
+      output: payload.output,
+      modelVersion: payload.modelVersion,
+      nonce: payload.nonce,
+      metadata: {
+        ...(metadata || {}),
+        provider: "gemini",
+        sessionId,
+        agentId,
+        eventType,
+        timestamp,
+      },
+      gemini: {
+        inputPrompt: payload.prompt,
+        generationConfig: payload.generationConfig,
+        expandedHash: payload.geminiExpandedHash,
+      },
+    };
+  }
 
   return {
     prompt,
@@ -205,6 +244,7 @@ function toClawCommitDecision(openclawLog) {
     nonce,
     metadata: {
       ...(metadata || {}),
+      provider: normalizedProvider || "openclaw",
       sessionId,
       agentId,
       eventType,
@@ -290,6 +330,18 @@ function main() {
   fs.mkdirSync(path.dirname(args.out), { recursive: true });
   fs.writeFileSync(args.out, JSON.stringify(decision, null, 2) + "\n", "utf8");
   console.log(`Generated ClawCommit decision JSON: ${args.out}`);
+  if (decision.gemini) {
+    const cfg = decision.gemini.generationConfig || {};
+    console.log(
+      [
+        "Gemini payload normalization:",
+        `model=${decision.modelVersion}`,
+        `temperature=${cfg.temperature}`,
+        `topP=${cfg.topP}`,
+        `candidateCount=${cfg.candidateCount}`,
+      ].join(" ")
+    );
+  }
 
   if (args.runDecisionCycle) {
     runDecisionCycle(args, decision);

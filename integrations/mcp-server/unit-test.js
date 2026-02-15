@@ -135,6 +135,55 @@ async function testOpenClawToolGuards() {
   );
 }
 
+async function testGeminiTooling() {
+  const buildResult = await invokeTool("clawcommit_openclaw_gemini_build_payload", {
+    prompt: "Review PR #9",
+    output: "OPENCLAW_APPROVE",
+    model_version: "gemini-1.5-pro",
+    generation_config: {
+      temperature: 0.2,
+      topP: 0.95,
+      candidateCount: 2,
+      stopSequences: ["END_REVIEW"],
+      safetySettings: [
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE",
+        },
+      ],
+    },
+    nonce: "0x" + "11".repeat(32),
+    log_sensitive: true,
+  });
+  const buildPayload = JSON.parse(buildResult.content[0].text);
+  assert.strictEqual(buildPayload.success, true);
+  assert.strictEqual(buildPayload.modelVersion, "gemini-1.5-pro");
+  assert.strictEqual(buildPayload.generationConfig.candidateCount, 2);
+  assert.match(buildPayload.prompt, /openclaw\\.gemini\\.template=/);
+  assert.strictEqual(
+    buildPayload.expandedAlgorithm,
+    "keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))"
+  );
+
+  const guardedCommit = await invokeTool("clawcommit_openclaw_gemini_commit", {
+    prompt: "Review PR #10",
+    output: "OPENCLAW_APPROVE",
+    model_version: "gemini-1.5-pro",
+    contract_address: "0x0000000000000000000000000000000000000001",
+    network: "bscTestnet",
+    allow_mainnet_writes: false,
+    log_sensitive: false,
+  });
+  const guardedPayload = JSON.parse(guardedCommit.content[0].text);
+  assert.strictEqual(guardedCommit.isError, true);
+  assert.strictEqual(guardedPayload.success, false);
+  assert.match(
+    guardedPayload.error,
+    /Auto-generated nonce would be redacted/,
+    "Gemini commit should enforce nonce when sensitive logs are disabled"
+  );
+}
+
 async function main() {
   assert.strictEqual(BSC_MAINNET_CHAIN_ID, 56n);
   testAddressValidation();
@@ -144,6 +193,7 @@ async function main() {
   testRedaction();
   testOpenClawPayloadDeterminism();
   await testOpenClawToolGuards();
+  await testGeminiTooling();
   console.log("mcp-server unit tests passed");
 }
 

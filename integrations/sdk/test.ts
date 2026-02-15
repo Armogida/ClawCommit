@@ -8,11 +8,16 @@
 import assert from "assert";
 import { ethers } from "ethers";
 import {
+  buildGeminiDecisionPayload,
   buildOpenClawDecisionPayload,
   ClawCommit,
+  commitGeminiDecision,
   commitOpenClawDecision,
+  computeGeminiExpandedHash,
   DecisionPayload,
+  GeminiDecisionInput,
   OpenClawDecisionInput,
+  revealGeminiDecision,
   revealOpenClawDecision,
 } from "./src/index";
 
@@ -52,6 +57,21 @@ function sampleOpenClawInput(): OpenClawDecisionInput {
       { name: "lint", required: false, passed: false, details: "warning only" },
       { name: "compile", required: true, passed: true, details: "ok" },
     ],
+  };
+}
+
+function sampleGeminiInput(): GeminiDecisionInput {
+  return {
+    prompt: "Review this pull request for safety and correctness.",
+    output: "OPENCLAW_APPROVE",
+    modelVersion: "gemini-1.5-pro",
+    generationConfig: {
+      temperature: 0.2,
+      topP: 0.95,
+      candidateCount: 2,
+      stopSequences: ["END_REVIEW"],
+      safetySettings: [{ category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" }],
+    },
   };
 }
 
@@ -169,6 +189,90 @@ async function testOpenClawHelpers() {
     commit.commitId,
     payload,
     "0x" + "88".repeat(32)
+  );
+  assert.strictEqual(reveal.verified, true);
+}
+
+async function testGeminiPayloadBuilder() {
+  console.log("\n=== Testing Gemini Payload Builder ===\n");
+
+  const nonce = "0x" + "aa".repeat(32);
+  const payloadA = buildGeminiDecisionPayload(sampleGeminiInput(), nonce);
+  const payloadB = buildGeminiDecisionPayload(
+    {
+      ...sampleGeminiInput(),
+      generationConfig: {
+        ...sampleGeminiInput().generationConfig,
+        safetySettings: [...(sampleGeminiInput().generationConfig?.safetySettings || [])].reverse(),
+      },
+    },
+    nonce
+  );
+
+  assert.strictEqual(payloadA.prompt, payloadB.prompt, "Gemini prompt envelope should be deterministic");
+  assert.strictEqual(payloadA.generationConfig.temperature, "0.2");
+  assert.strictEqual(payloadA.generationConfig.topP, "0.95");
+  assert.strictEqual(payloadA.generationConfig.candidateCount, 2);
+  assert.strictEqual(payloadA.expandedHash, payloadB.expandedHash, "expanded hash should be deterministic");
+
+  const recomputed = computeGeminiExpandedHash(payloadA, nonce);
+  assert.strictEqual(recomputed, payloadA.expandedHash, "expanded hash recomputation should match");
+}
+
+async function testGeminiHelpers() {
+  console.log("\n=== Testing Gemini SDK Helpers ===\n");
+
+  const fakeClaw = {
+    async commit(
+      commitPayload: DecisionPayload,
+      nonce?: string
+    ): Promise<{
+      commitId: string;
+      hash: string;
+      nonce: string;
+      txHash: string;
+      explorerUrl: string;
+      prompt: string;
+      output: string;
+      modelVersion: string;
+    }> {
+      return {
+        commitId: "12",
+        hash: "0x" + "99".repeat(32),
+        nonce: nonce || "0x" + "88".repeat(32),
+        txHash: "0x" + "77".repeat(32),
+        explorerUrl: "https://testnet.bscscan.com/tx/mock-gemini",
+        prompt: commitPayload.prompt,
+        output: commitPayload.output,
+        modelVersion: commitPayload.modelVersion,
+      };
+    },
+    async reveal(): Promise<{
+      commitId: string;
+      txHash: string;
+      verified: boolean;
+      explorerUrl: string;
+    }> {
+      return {
+        commitId: "12",
+        txHash: "0x" + "66".repeat(32),
+        verified: true,
+        explorerUrl: "https://testnet.bscscan.com/tx/mock-gemini-reveal",
+      };
+    },
+  } as unknown as ClawCommit;
+
+  const nonce = "0x" + "bb".repeat(32);
+  const commit = await commitGeminiDecision(fakeClaw, sampleGeminiInput(), nonce);
+  assert.strictEqual(commit.modelVersion, "gemini-1.5-pro");
+  assert.strictEqual(commit.nonce, nonce);
+  assert.strictEqual(commit.payload.generationConfig.candidateCount, 2);
+
+  const reveal = await revealGeminiDecision(
+    fakeClaw,
+    commit.commitId,
+    commit.payload,
+    commit.nonce
   );
   assert.strictEqual(reveal.verified, true);
 }
@@ -336,6 +440,8 @@ async function runAllTests() {
   await testStaticMethods();
   await testOpenClawPayloadBuilder();
   await testOpenClawHelpers();
+  await testGeminiPayloadBuilder();
+  await testGeminiHelpers();
   await testConstructorValidation();
   await testBigIntSafety();
   await testReadOnlyMode();

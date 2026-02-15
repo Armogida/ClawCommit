@@ -13,6 +13,10 @@
     "nonce"
   ],
   "properties": {
+    "provider": {
+      "type": "string",
+      "description": "Provider that produced this decision log (for example gemini, claude, codex, openclaw)."
+    },
     "sessionId": {
       "type": "string",
       "description": "The agent run or OpenClaw session identifier."
@@ -46,6 +50,45 @@
       "type": "string",
       "pattern": "^0x[a-fA-F0-9]{64}$",
       "description": "Random 32-byte hex nonce used in commit/reveal hashing."
+    },
+    "generationConfig": {
+      "type": "object",
+      "description": "Optional provider generation settings used to produce the output.",
+      "properties": {
+        "temperature": {
+          "type": ["number", "string"]
+        },
+        "topP": {
+          "type": ["number", "string"]
+        },
+        "candidateCount": {
+          "type": ["integer", "string"],
+          "minimum": 1
+        },
+        "stopSequences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "safetySettings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "threshold": {
+                "type": "string"
+              }
+            },
+            "required": ["category", "threshold"],
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
     },
     "metadata": {
       "type": "object",

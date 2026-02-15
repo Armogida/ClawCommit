@@ -9,6 +9,7 @@
 
 import { fileURLToPath, pathToFileURL } from "url";
 import path from "path";
+import { createRequire } from "module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -18,7 +19,15 @@ import { randomBytes } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 dotenv.config({ path: path.join(__dirname, ".env") });
+
+const {
+  buildGeminiCommitPayload,
+  nextGeminiNonce,
+  parseGeminiPromptEnvelope,
+  computeGeminiDecisionHash,
+} = require("../openclaw/gemini-utils.js");
 
 const BSC_MAINNET_CHAIN_ID = 56n;
 const OPENCLAW_PROMPT_TEMPLATE_VERSION = "openclaw-prompt-v1";
@@ -71,6 +80,25 @@ const OpenClawValidationSchema = z.object({
     .optional()
     .describe("Whether this validation gates approval (defaults true)"),
   details: z.string().optional().describe("Optional validation details"),
+});
+
+const GeminiSafetySettingSchema = z.object({
+  category: z.string().min(1).describe("Gemini safety category"),
+  threshold: z.string().min(1).describe("Gemini safety threshold"),
+});
+
+const GeminiGenerationConfigSchema = z.object({
+  temperature: z.number().optional().describe("Gemini temperature"),
+  topP: z.number().optional().describe("Gemini top-p"),
+  candidateCount: z.number().int().min(1).optional().describe("Gemini candidate count"),
+  stopSequences: z
+    .array(z.string())
+    .optional()
+    .describe("Stop sequences used during generation"),
+  safetySettings: z
+    .array(GeminiSafetySettingSchema)
+    .optional()
+    .describe("Gemini safety settings"),
 });
 
 function requireAddress(address) {
@@ -872,6 +900,377 @@ server.tool(
         network,
         sensitiveFieldsRedacted: !log_sensitive,
         message: "OpenClaw decision revealed and verified successfully",
+      });
+    } catch (error) {
+      return buildErrorResponse(error);
+    }
+  }
+);
+
+function resolveGeminiModelVersion(modelVersion, preset) {
+  const normalizedModel = String(modelVersion || "").trim();
+  if (normalizedModel) {
+    return normalizedModel;
+  }
+  if (preset === "geminiFlash") {
+    return "gemini-1.5-flash";
+  }
+  return "gemini-1.5-pro";
+}
+
+server.tool(
+  "clawcommit_openclaw_gemini_build_payload",
+  "Build deterministic Gemini attestation payload including canonical prompt envelope and expanded hash.",
+  {
+    prompt: z.string().describe("Gemini prompt context"),
+    output: z.string().describe("Gemini output text/decision"),
+    model_version: z
+      .string()
+      .optional()
+      .describe("Gemini model version (for example gemini-1.5-pro)"),
+    preset: z
+      .enum(["geminiPro", "geminiFlash"])
+      .default("geminiPro")
+      .describe("Gemini preset fallback when model_version is omitted"),
+    generation_config: GeminiGenerationConfigSchema
+      .optional()
+      .describe("Gemini generation configuration"),
+    nonce: z.string().optional().describe("Optional explicit nonce"),
+    nonce_strategy: z
+      .enum(["random", "counter"])
+      .default("random")
+      .describe("Nonce generation strategy when nonce is omitted"),
+    nonce_counter_file: z
+      .string()
+      .optional()
+      .describe("Counter file path for nonce_strategy=counter"),
+    log_sensitive: z
+      .boolean()
+      .default(false)
+      .describe("Set true to include prompt/output/nonce in response"),
+  },
+  async ({
+    prompt,
+    output,
+    model_version,
+    preset,
+    generation_config,
+    nonce,
+    nonce_strategy,
+    nonce_counter_file,
+    log_sensitive,
+  }) => {
+    try {
+      const modelVersion = resolveGeminiModelVersion(model_version, preset);
+      const finalNonce = nonce || nextGeminiNonce(nonce_strategy, nonce_counter_file);
+      const payload = buildGeminiCommitPayload({
+        prompt,
+        output,
+        modelVersion,
+        nonce: finalNonce,
+        generationConfig: generation_config,
+      });
+
+      return buildTextResponse({
+        success: true,
+        prompt: formatSensitive(payload.promptEnvelope, log_sensitive),
+        output: formatSensitive(payload.output, log_sensitive),
+        inputPrompt: formatSensitive(prompt, log_sensitive),
+        modelVersion: payload.modelVersion,
+        nonce: formatSensitive(payload.nonce, log_sensitive),
+        chainHash: payload.chainHash,
+        expandedHash: payload.geminiExpandedHash,
+        expandedAlgorithm:
+          "keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))",
+        generationConfig: payload.generationConfig,
+        sensitiveFieldsRedacted: !log_sensitive,
+      });
+    } catch (error) {
+      return buildErrorResponse(error);
+    }
+  }
+);
+
+server.tool(
+  "clawcommit_openclaw_gemini_commit",
+  "Commit a Gemini decision with deterministic prompt envelope and expanded hash metadata.",
+  {
+    prompt: z.string().describe("Gemini prompt context"),
+    output: z.string().describe("Gemini output text/decision"),
+    model_version: z
+      .string()
+      .optional()
+      .describe("Gemini model version (for example gemini-1.5-pro)"),
+    preset: z
+      .enum(["geminiPro", "geminiFlash"])
+      .default("geminiPro")
+      .describe("Gemini preset fallback when model_version is omitted"),
+    generation_config: GeminiGenerationConfigSchema
+      .optional()
+      .describe("Gemini generation configuration"),
+    nonce: z.string().optional().describe("Optional explicit nonce"),
+    nonce_strategy: z
+      .enum(["random", "counter"])
+      .default("random")
+      .describe("Nonce generation strategy when nonce is omitted"),
+    nonce_counter_file: z
+      .string()
+      .optional()
+      .describe("Counter file path for nonce_strategy=counter"),
+    contract_address: z.string().describe("ClawCommit contract address"),
+    network: z
+      .enum(["bscMainnet", "bscTestnet"])
+      .default("bscTestnet")
+      .describe("BNB Chain network"),
+    allow_mainnet_writes: z
+      .boolean()
+      .default(false)
+      .describe("Set true to allow commit writes on BSC mainnet"),
+    log_sensitive: z
+      .boolean()
+      .default(false)
+      .describe("Set true to include prompt/output/nonce in response"),
+  },
+  async ({
+    prompt,
+    output,
+    model_version,
+    preset,
+    generation_config,
+    nonce,
+    nonce_strategy,
+    nonce_counter_file,
+    contract_address,
+    network,
+    allow_mainnet_writes,
+    log_sensitive,
+  }) => {
+    try {
+      if (!nonce && !log_sensitive) {
+        throw new Error(
+          "Auto-generated nonce would be redacted. Provide nonce explicitly or set log_sensitive=true."
+        );
+      }
+
+      const modelVersion = resolveGeminiModelVersion(model_version, preset);
+      const finalNonce = nonce || nextGeminiNonce(nonce_strategy, nonce_counter_file);
+      const payload = buildGeminiCommitPayload({
+        prompt,
+        output,
+        modelVersion,
+        nonce: finalNonce,
+        generationConfig: generation_config,
+      });
+
+      const { contract, signer } = getContract(
+        contract_address,
+        network,
+        true,
+        allow_mainnet_writes
+      );
+      const tx = await contract.commitDecision(payload.chainHash);
+      const receipt = await tx.wait();
+
+      const event = receipt.logs
+        .map((log) => {
+          try {
+            return contract.interface.parseLog(log);
+          } catch {
+            return null;
+          }
+        })
+        .find((entry) => entry && entry.name === "CommitCreated");
+
+      const commitId = event ? event.args.commitId.toString() : null;
+
+      return buildTextResponse({
+        success: true,
+        commitId,
+        txHash: receipt.hash,
+        explorerUrl: getExplorerUrl(network, receipt.hash),
+        hash: payload.chainHash,
+        expandedHash: payload.geminiExpandedHash,
+        expandedAlgorithm:
+          "keccak256(abi.encode(prompt, output, modelVersion, nonce, temperature, topP))",
+        modelVersion: payload.modelVersion,
+        generationConfig: payload.generationConfig,
+        prompt: formatSensitive(payload.promptEnvelope, log_sensitive),
+        output: formatSensitive(payload.output, log_sensitive),
+        inputPrompt: formatSensitive(prompt, log_sensitive),
+        nonce: formatSensitive(finalNonce, log_sensitive),
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        committer: await signer.getAddress(),
+        network,
+        sensitiveFieldsRedacted: !log_sensitive,
+      });
+    } catch (error) {
+      return buildErrorResponse(error);
+    }
+  }
+);
+
+server.tool(
+  "clawcommit_openclaw_gemini_reveal",
+  "Reveal a Gemini commitment using canonical Gemini payload inputs.",
+  {
+    commit_id: CommitIdSchema.describe("Commitment ID to reveal"),
+    prompt: z.string().describe("Original Gemini prompt"),
+    output: z.string().describe("Original Gemini output"),
+    model_version: z.string().describe("Original Gemini model version"),
+    generation_config: GeminiGenerationConfigSchema
+      .optional()
+      .describe("Gemini generation configuration"),
+    nonce: z.string().describe("Original nonce used during commit"),
+    contract_address: z.string().describe("ClawCommit contract address"),
+    network: z
+      .enum(["bscMainnet", "bscTestnet"])
+      .default("bscTestnet")
+      .describe("BNB Chain network"),
+    allow_mainnet_writes: z
+      .boolean()
+      .default(false)
+      .describe("Set true to allow reveal writes on BSC mainnet"),
+    log_sensitive: z
+      .boolean()
+      .default(false)
+      .describe("Set true to include prompt/output/nonce in response"),
+  },
+  async ({
+    commit_id,
+    prompt,
+    output,
+    model_version,
+    generation_config,
+    nonce,
+    contract_address,
+    network,
+    allow_mainnet_writes,
+    log_sensitive,
+  }) => {
+    try {
+      const normalizedCommitId = normalizeCommitId(commit_id);
+      const payload = buildGeminiCommitPayload({
+        prompt,
+        output,
+        modelVersion: model_version,
+        nonce,
+        generationConfig: generation_config,
+      });
+
+      const { contract, signer } = getContract(
+        contract_address,
+        network,
+        true,
+        allow_mainnet_writes
+      );
+      const commitment = await contract.getCommitment(normalizedCommitId);
+
+      if (commitment.revealed) {
+        throw new Error("Commitment already revealed");
+      }
+      if (commitment.hash !== payload.chainHash) {
+        throw new Error(
+          "Hash mismatch. Gemini prompt/output/model/generation-config/nonce does not match committed hash."
+        );
+      }
+
+      const tx = await contract.revealDecision(
+        normalizedCommitId,
+        payload.promptEnvelope,
+        payload.output,
+        payload.modelVersion,
+        payload.nonce
+      );
+      const receipt = await tx.wait();
+      const verified = await contract.verifyReplay(normalizedCommitId);
+
+      return buildTextResponse({
+        success: true,
+        commitId: normalizedCommitId.toString(),
+        txHash: receipt.hash,
+        explorerUrl: getExplorerUrl(network, receipt.hash),
+        verified,
+        hash: payload.chainHash,
+        expandedHash: payload.geminiExpandedHash,
+        modelVersion: payload.modelVersion,
+        generationConfig: payload.generationConfig,
+        prompt: formatSensitive(payload.promptEnvelope, log_sensitive),
+        output: formatSensitive(payload.output, log_sensitive),
+        inputPrompt: formatSensitive(prompt, log_sensitive),
+        nonce: formatSensitive(payload.nonce, log_sensitive),
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        committer: await signer.getAddress(),
+        network,
+        sensitiveFieldsRedacted: !log_sensitive,
+      });
+    } catch (error) {
+      return buildErrorResponse(error);
+    }
+  }
+);
+
+server.tool(
+  "clawcommit_openclaw_gemini_query_audit_trail",
+  "Query Gemini decision audit details from a revealed commitment for cross-agent verification.",
+  {
+    commit_id: CommitIdSchema.describe("Commitment ID to inspect"),
+    contract_address: z.string().describe("ClawCommit contract address"),
+    network: z
+      .enum(["bscMainnet", "bscTestnet"])
+      .default("bscTestnet")
+      .describe("BNB Chain network"),
+    log_sensitive: z
+      .boolean()
+      .default(false)
+      .describe("Set true to include prompt/output/nonce in response"),
+  },
+  async ({ commit_id, contract_address, network, log_sensitive }) => {
+    try {
+      const normalizedCommitId = normalizeCommitId(commit_id);
+      const { contract } = getContract(contract_address, network, false);
+      const commitment = await contract.getCommitment(normalizedCommitId);
+      const parsed = parseGeminiPromptEnvelope(commitment.prompt);
+      const isGemini = Boolean(parsed && parsed.isGeminiEnvelope);
+
+      let expandedHash = "";
+      if (isGemini && commitment.revealed) {
+        expandedHash = computeGeminiDecisionHash(
+          commitment.prompt,
+          commitment.output,
+          commitment.modelVersion,
+          commitment.nonce,
+          parsed.temperature,
+          parsed.topP
+        );
+      }
+
+      return buildTextResponse({
+        success: true,
+        commitId: normalizedCommitId.toString(),
+        revealed: commitment.revealed,
+        hash: commitment.hash,
+        expandedHash,
+        modelVersion: commitment.modelVersion,
+        committer: commitment.committer,
+        committerUrl: getAddressUrl(network, commitment.committer),
+        timestamp: new Date(Number(commitment.timestamp) * 1000).toISOString(),
+        isGeminiEnvelope: isGemini,
+        gemini: isGemini
+          ? {
+              inputPrompt: formatSensitive(parsed.prompt, log_sensitive),
+              temperature: parsed.temperature,
+              topP: parsed.topP,
+              candidateCount: parsed.candidateCount,
+              stopSequences: parsed.stopSequences,
+              safetySettings: parsed.safetySettings,
+              configDigest: parsed.configDigest || "",
+            }
+          : null,
+        output: formatSensitive(commitment.output, log_sensitive),
+        nonce: formatSensitive(commitment.nonce, log_sensitive),
+        sensitiveFieldsRedacted: !log_sensitive,
       });
     } catch (error) {
       return buildErrorResponse(error);
