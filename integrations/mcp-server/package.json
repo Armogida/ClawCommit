@@ -5,8 +5,11 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "setup": "bash setup-local.sh",
+    "env": "bash configure-env.sh",
     "test": "node unit-test.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "start:local": "bash run-mcp.sh"
   },
   "keywords": [
     "mcp",

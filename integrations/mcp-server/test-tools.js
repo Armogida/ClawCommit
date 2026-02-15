@@ -4,11 +4,15 @@
  * Test script for ClawCommit MCP Server tools.
  */
 
+import path from "path";
+import { fileURLToPath } from "url";
 import { ethers } from "ethers";
 import dotenv from "dotenv";
 import { randomBytes } from "crypto";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 const NETWORKS = {
   bscMainnet: {

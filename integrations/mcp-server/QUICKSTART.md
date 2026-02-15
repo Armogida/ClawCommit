@@ -16,43 +16,39 @@ Enable Claude Code (or any MCP-compatible AI) to:
 - A BNB Chain wallet with small BNB balance (~0.01 BNB for testnet testing)
 - Claude Code or another MCP-compatible AI client
 
-## Step 1: Install Dependencies (30 seconds)
+## Step 1: One-command setup (recommended)
+
+From repo root:
 
 ```bash
-cd /Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server
-npm install
+npm run mcp:setup
 ```
 
-Expected output:
-```
-added 45 packages in 12s
-```
+This sets up dependencies, creates `integrations/mcp-server/.env` if missing, and writes `.claude/settings.json`.
 
 ## Step 2: Configure Environment (1 minute)
 
-Copy the example environment file:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and add your private key:
+Edit `integrations/mcp-server/.env` and add your private key:
 
 ```env
 DEPLOYER_PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE
 ```
 
-**Where to get your private key:**
-- MetaMask: Account menu → Account details → Export private key
-- Other wallets: Check wallet documentation
-
-**Security:** Never commit `.env` to git. It's already in `.gitignore`.
-
 ## Step 3: Test the Setup (30 seconds)
 
-Run the test script to verify everything works:
+```bash
+npm run mcp:test
+```
+
+Expected output:
+```
+mcp-server unit tests passed
+```
+
+Run deeper connectivity checks from the integration directory:
 
 ```bash
+cd /Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server
 node test-tools.js
 ```
 
@@ -90,7 +86,28 @@ If you have a deployed contract, test with:
 node test-tools.js 0xYourContractAddress bscTestnet
 ```
 
-## Step 4: Deploy ClawCommit Contract (Optional, if not already deployed)
+## Step 4: Fund Testnet Wallet (if balance is low)
+
+If Test 3 shows low or zero `bscTestnet` balance, fund this wallet:
+
+`0x6B13816852B65367a2c6B6e6C1583188C16AdA33`
+
+1. Open the official BNB testnet faucet:
+- https://www.bnbchain.org/en/testnet-faucet
+2. Paste your wallet address and request `tBNB`.
+3. Wait 10-60 seconds for confirmation.
+4. Verify in terminal:
+
+```bash
+cd /Users/luigiarmogida/Documents/projects/ClawCommit
+node integrations/mcp-server/test-tools.js "" bscTestnet
+```
+
+If the official faucet is busy, try one of these:
+- QuickNode BSC testnet faucet: https://faucet.quicknode.com/binance-smart-chain/bnb-testnet
+- Chainstack BNB testnet faucet: https://faucet.chainstack.com/bnb-testnet-faucet
+
+## Step 5: Deploy ClawCommit Contract (Optional, if not already deployed)
 
 If you don't have a contract deployed yet:
 
@@ -101,33 +118,30 @@ npm run deploy:testnet
 
 Save the deployed contract address from the output.
 
-## Step 5: Add to Claude Code (2 minutes)
+## Step 6: Confirm Claude settings entry
 
-Edit `/Users/luigiarmogida/Documents/projects/ClawCommit/.claude/settings.json`:
+`npm run mcp:setup` writes this entry to `/Users/luigiarmogida/Documents/projects/ClawCommit/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "clawcommit": {
-      "command": "node",
+      "command": "bash",
       "args": [
-        "/Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server/index.js"
-      ],
-      "env": {
-        "DEPLOYER_PRIVATE_KEY": "0xYOUR_PRIVATE_KEY_HERE"
-      }
+        "/Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server/run-mcp.sh"
+      ]
     }
   }
 }
 ```
 
-Or create a global config at `~/.config/claude-code/settings.json` (macOS/Linux) or `%APPDATA%\claude-code\settings.json` (Windows).
+The launcher script reads `integrations/mcp-server/.env`, so secrets are not stored in Claude settings.
 
-## Step 6: Restart Claude Code
+## Step 7: Restart Claude Code
 
 Restart Claude Code to load the MCP server. Look for "ClawCommit MCP Server running" in the logs.
 
-## Step 7: Test in Claude Code (1 minute)
+## Step 8: Test in Claude Code (1 minute)
 
 Open a new conversation in Claude Code and try:
 
@@ -234,7 +248,7 @@ Create tamper-evident audit logs of AI decision-making processes.
 
 **BSC Testnet (Recommended for testing):**
 - Network: `bscTestnet`
-- Faucet: https://testnet.bnbchain.org/faucet-smart
+- Faucet: https://www.bnbchain.org/en/testnet-faucet
 - Explorer: https://testnet.bscscan.com
 - Cost: Free (testnet BNB)
 
@@ -251,7 +265,7 @@ Create tamper-evident audit logs of AI decision-making processes.
 - Restart Claude Code after changing environment variables
 
 ### "Insufficient funds for gas"
-- Get testnet BNB from faucet: https://testnet.bnbchain.org/faucet-smart
+- Get testnet BNB from faucet: https://www.bnbchain.org/en/testnet-faucet
 - Or fund mainnet wallet from an exchange
 
 ### "Hash mismatch" during reveal

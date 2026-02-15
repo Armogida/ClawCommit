@@ -2,6 +2,12 @@
 
 MCP server for ClawCommit v2 commit-reveal flows on BNB Chain.
 
+## Quickstart
+
+- Full step-by-step setup and faucet instructions: [`QUICKSTART.md`](./QUICKSTART.md)
+- One-command setup from repo root: `npm run mcp:setup`
+- Interactive env wizard: `npm run mcp:env`
+
 ## Supported Operations
 - `clawcommit_commit`
 - `clawcommit_reveal`
@@ -87,6 +93,55 @@ BSC_TESTNET_RPC_URL=https://data-seed-prebsc-1-s1.binance.org:8545/
 npm install
 npm start
 ```
+
+## Repo Setup (Recommended)
+
+From repo root:
+
+```bash
+npm run mcp:setup
+```
+
+This command:
+- installs `integrations/mcp-server` dependencies,
+- creates `integrations/mcp-server/.env` if missing,
+- writes/updates `.claude/settings.json` with a `clawcommit` MCP server entry that runs `integrations/mcp-server/run-mcp.sh`.
+
+Then update `integrations/mcp-server/.env` with your real `DEPLOYER_PRIVATE_KEY`.
+
+Interactive env wizard (recommended):
+
+```bash
+npm run mcp:env
+```
+
+Or run setup + wizard together:
+
+```bash
+npm run mcp:setup:interactive
+```
+
+Start manually (from repo root):
+
+```bash
+npm run mcp:start
+```
+
+## Terminal-Only Testing
+
+If you are only using terminal (no MCP client UI), run:
+
+```bash
+# Unit tests for MCP code
+npm run mcp:test
+
+# Connectivity + wallet checks (read-only)
+cd integrations/mcp-server
+node test-tools.js "" bscTestnet
+node test-tools.js "" bscMainnet
+```
+
+For end-to-end transactions in terminal, use repo scripts (`deploy:testnet`, `commit`, `reveal`, `replay`) under `/Users/luigiarmogida/Documents/projects/ClawCommit/scripts`.
 
 ## Notes
 - Reveal requires the same payload fields and nonce used when committing.

@@ -24,7 +24,12 @@
     "batch:proof": "ts-node scripts/batch/generateProof.ts",
     "batch:reveal-leaf": "HARDHAT_NETWORK=bscTestnet ts-node scripts/batch/revealLeaf.ts",
     "batch:replay": "ts-node scripts/batch/replayBatch.ts",
-    "batch:demo:local": "bash scripts/batch/demoLocal.sh"
+    "batch:demo:local": "bash scripts/batch/demoLocal.sh",
+    "mcp:setup": "bash integrations/mcp-server/setup-local.sh",
+    "mcp:setup:interactive": "bash integrations/mcp-server/setup-local.sh --configure-env",
+    "mcp:env": "bash integrations/mcp-server/configure-env.sh",
+    "mcp:start": "bash integrations/mcp-server/run-mcp.sh",
+    "mcp:test": "npm --prefix integrations/mcp-server test"
   },
   "keywords": ["bnb-chain", "bsc", "commit-reveal", "ai", "deterministic", "smart-contract"],
   "license": "MIT",

@@ -18,3 +18,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Local AI client settings
+.claude/settings.json

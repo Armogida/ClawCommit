@@ -7,7 +7,8 @@
  * Enables MCP clients to commit, reveal, and verify AI decisions on BNB Chain.
  */
 
-import { pathToFileURL } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
+import path from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -15,7 +16,9 @@ import { ethers } from "ethers";
 import dotenv from "dotenv";
 import { randomBytes } from "crypto";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 const BSC_MAINNET_CHAIN_ID = 56n;
 

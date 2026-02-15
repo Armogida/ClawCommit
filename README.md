@@ -260,6 +260,13 @@ and writes a clean transcript to:
 
 This project uses standard Solidity tooling with Hardhat and ethers.js. The current contract intentionally avoids token/governance logic and keeps minimal attack surface.
 
+## MCP Integration Quickstart
+
+For MCP server setup, env configuration, testnet faucet steps, and terminal verification:
+
+- `/Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server/README.md`
+- `/Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server/QUICKSTART.md`
+
 ## Repo Layout
 
 - `contracts/ClawCommit.sol` - V2 deterministic commit-reveal contract

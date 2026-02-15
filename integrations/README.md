@@ -22,14 +22,15 @@ This directory contains integrations that make ClawCommit accessible to AI agent
 
 **Quick Start**:
 ```bash
-cd mcp-server/
-npm install
-cp .env.example .env
-# Edit .env with your DEPLOYER_PRIVATE_KEY
-node test-tools.js
+cd ..
+npm run mcp:setup
+npm run mcp:env
+npm run mcp:test
 ```
 
-**Documentation**: [mcp-server/README.md](./mcp-server/README.md)
+**Documentation**:
+- [mcp-server/README.md](./mcp-server/README.md)
+- [mcp-server/QUICKSTART.md](./mcp-server/QUICKSTART.md)
 
 ---
 
