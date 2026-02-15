@@ -22,7 +22,8 @@
     "batch:get": "HARDHAT_NETWORK=bsc ts-node scripts/batch/getBatch.ts",
     "batch:proof": "ts-node scripts/batch/generateProof.ts",
     "batch:reveal-leaf": "HARDHAT_NETWORK=bsc ts-node scripts/batch/revealLeaf.ts",
-    "batch:replay": "ts-node scripts/batch/replayBatch.ts"
+    "batch:replay": "ts-node scripts/batch/replayBatch.ts",
+    "batch:demo:local": "bash scripts/batch/demoLocal.sh"
   },
   "keywords": ["bnb-chain", "bsc", "commit-reveal", "ai", "deterministic", "smart-contract"],
   "license": "MIT",

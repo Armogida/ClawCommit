@@ -205,6 +205,17 @@ npx ts-node scripts/batch/replayBatch.ts \
   --network bsc
 ```
 
+### One-command local stage demo
+
+```bash
+npm run batch:demo:local
+```
+
+This executes the exact sequence:
+`build -> generateProof -> commitBatch -> revealLeaf -> replayBatch`
+and writes a clean transcript to:
+`deployment-proof/batch-demo-transcript.txt`.
+
 ## Mainnet Runbook
 
 1. Set `.env` from `.env.example`:

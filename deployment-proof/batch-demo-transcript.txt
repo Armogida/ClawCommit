@@ -1,0 +1,87 @@
+$ npx hardhat node  # started in background
+Hardhat node PID: 62320
+$ npx hardhat run scripts/batch/deployBatch.ts --network localhost
+Deploying ClawCommitBatch...
+Network: localhost
+ClawCommitBatch deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+Deployment Tx: 0x8d37daa6498843d2a01cb51469137da16442cfd72a4fcc70b2565385cdf39be6
+Chain ID: 31337
+
+Resolved contract address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+
+$ npx ts-node scripts/batch/build.ts --in data/decisions-batch-001.ndjson --out artifacts/batches/batch-001.manifest.json --model-version clawcommit-v2.0
+Batch manifest generated.
+Input: data/decisions-batch-001.ndjson
+Output: artifacts/batches/batch-001.manifest.json
+Leaf count: 3
+Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
+
+$ npx ts-node scripts/batch/generateProof.ts --manifest artifacts/batches/batch-001.manifest.json --leaf-index 1 --out artifacts/batches/batch-001-leaf-1.proof.json
+Merkle proof generated.
+Manifest: artifacts/batches/batch-001.manifest.json
+Leaf index: 1
+Output: artifacts/batches/batch-001-leaf-1.proof.json
+Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
+
+$ HARDHAT_NETWORK=localhost npx ts-node scripts/batch/commitBatch.ts --contract 0x5FbDB2315678afecb367f032d93F642f64180aa3 --manifest artifacts/batches/batch-001.manifest.json
+Batch committed.
+Manifest: artifacts/batches/batch-001.manifest.json
+Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
+Leaf count: 3
+Manifest hash: 0xc14a71a924b8dd2aa7bb47b24e2f34d0d748e202a8871ad5714b8037d1aea571
+Commit Tx: 0x8424dd3081a2426ff409da105a441aa50d6d80c3dc45d3b46ce0012f061ec238
+Batch ID: 0
+
+$ HARDHAT_NETWORK=localhost npx ts-node scripts/batch/revealLeaf.ts --contract 0x5FbDB2315678afecb367f032d93F642f64180aa3 --batch-id 0 --leaf-index 1 --manifest artifacts/batches/batch-001.manifest.json
+
+Revealing batch leaf...
+Batch ID:    0
+Leaf Index:  1
+Prompt:      Should staking rewards be rebalanced this epoch?
+Output:      APPROVE_REWARD_SHIFT
+Nonce:       batch-nonce-0002
+
+Reveal Tx:   0x26fc5ed1e92ed31d7ab46d3567fa33430fb716b26669acf04b4de30eaa38a628
+
+✓ Leaf revealed successfully
+Batch ID:    0
+Leaf Index:  1
+Leaf Hash:   0xd2cdcc64e01473e76737039e02c0976c4bf9d77ca54850053d9ca11999cd3065
+Revealer:    0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+
+$ BSC_RPC_URL=http://127.0.0.1:8545 npx ts-node scripts/batch/replayBatch.ts --manifest artifacts/batches/batch-001.manifest.json --contract 0x5FbDB2315678afecb367f032d93F642f64180aa3 --batch-id 0 --network localhost
+
+📦 Batch Replay Verification
+   Manifest: artifacts/batches/batch-001.manifest.json
+   Leaves: 3
+   Model: clawcommit-v2.0
+   ✓ All 3 leaf hashes verified
+   ✓ Merkle root verified: 0x27b1622177b386d3...
+
+🔗 On-Chain Verification
+   Contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+   Batch ID: 0
+   ✓ On-chain Merkle root matches
+   ✓ Manifest hash matches
+   ✓ Leaf count matches: 3
+
+✓ DETERMINISTIC BATCH REPLAY VERIFIED
+   Batch ID: 0
+   Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
+   Committer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+   Timestamp: 2026-02-15T08:07:52.000Z
+
+$ npx ts-node scripts/batch/replayBatch.ts --manifest artifacts/batches/batch-001.manifest.json --local
+
+📦 Batch Replay Verification
+   Manifest: artifacts/batches/batch-001.manifest.json
+   Leaves: 3
+   Model: clawcommit-v2.0
+   ✓ All 3 leaf hashes verified
+   ✓ Merkle root verified: 0x27b1622177b386d3...
+
+✓ LOCAL REPLAY VERIFIED
+   Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
+
+Transcript saved to deployment-proof/batch-demo-transcript.txt
+$ kill 62320
