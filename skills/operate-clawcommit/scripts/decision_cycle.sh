@@ -7,10 +7,11 @@ Usage:
   decision_cycle.sh --contract <ADDR> --prompt <PROMPT> --output <OUTPUT> --model-version <VERSION>
                     [--nonce <NONCE>] [--network <NETWORK>] [--rpc <RPC_URL>]
                     [--allow-mainnet-writes <true|false>]
-                    [--repo <PATH>] [--skip-replay] [--json-out <PATH>]
+                    [--repo <PATH>] [--skip-replay] [--json-out <PATH>] [--json-include-prompt]
                     [--deploy-tx <TX_HASH>] [--links-out <PATH>]
                     [--post-gh-pr <PR_NUMBER>] [--gh-repo <OWNER/REPO>]
-                    [--links-title <TITLE>]
+                    [--links-title <TITLE>] [--links-include-prompt]
+                    [--links-prompt-max-chars <N>] [--links-no-redact]
 USAGE
 }
 
@@ -25,11 +26,15 @@ rpc_url=""
 allow_mainnet_writes="false"
 skip_replay="false"
 json_out=""
+json_include_prompt="false"
 deploy_tx=""
 links_out=""
 post_gh_pr=""
 gh_repo=""
 links_title="ClawCommit Decision Cycle"
+links_include_prompt="false"
+links_prompt_max_chars="1200"
+links_redact="true"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -44,11 +49,15 @@ while [[ $# -gt 0 ]]; do
     --allow-mainnet-writes) allow_mainnet_writes="$2"; shift 2 ;;
     --skip-replay) skip_replay="true"; shift ;;
     --json-out) json_out="$2"; shift 2 ;;
+    --json-include-prompt) json_include_prompt="true"; shift ;;
     --deploy-tx) deploy_tx="$2"; shift 2 ;;
     --links-out) links_out="$2"; shift 2 ;;
     --post-gh-pr) post_gh_pr="$2"; shift 2 ;;
     --gh-repo) gh_repo="$2"; shift 2 ;;
     --links-title) links_title="$2"; shift 2 ;;
+    --links-include-prompt) links_include_prompt="true"; shift ;;
+    --links-prompt-max-chars) links_prompt_max_chars="$2"; shift 2 ;;
+    --links-no-redact) links_redact="false"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown arg '$1'" >&2; usage; exit 1 ;;
   esac
@@ -81,7 +90,7 @@ if [[ ! -x "$ts_node_bin" ]]; then
 fi
 
 if [[ -z "$nonce" ]]; then
-  nonce="$(openssl rand -hex 16)"
+  nonce="0x$(openssl rand -hex 32)"
 fi
 
 if [[ ( -n "$links_out" || -n "$post_gh_pr" ) && -z "$json_out" ]]; then
@@ -179,25 +188,53 @@ echo "  replay:         $replay_result"
 
 if [[ -n "$json_out" ]]; then
   mkdir -p "$(dirname "$json_out")"
-  cat > "$json_out" <<EOF
-{
-  "network": "$network",
-  "contract": "$contract",
-  "deployTx": "${deploy_tx}",
-  "commitId": "$commit_id",
-  "commitTx": "${commit_tx}",
-  "revealTx": "${reveal_tx}",
-  "nonce": "$nonce",
-  "onchainVerify": "${onchain_verify}",
-  "replay": "$replay_result"
+  export CC_NETWORK="$network"
+  export CC_CONTRACT="$contract"
+  export CC_DEPLOY_TX="$deploy_tx"
+  export CC_COMMIT_ID="$commit_id"
+  export CC_COMMIT_TX="$commit_tx"
+  export CC_REVEAL_TX="$reveal_tx"
+  export CC_NONCE="$nonce"
+  export CC_ONCHAIN_VERIFY="$onchain_verify"
+  export CC_REPLAY="$replay_result"
+  export CC_JSON_INCLUDE_PROMPT="$json_include_prompt"
+  export CC_PROMPT="$prompt"
+  export CC_OUTPUT="$output"
+  export CC_MODEL_VERSION="$model_version"
+  node - <<'NODE' > "$json_out"
+const payload = {
+  network: process.env.CC_NETWORK || "",
+  contract: process.env.CC_CONTRACT || "",
+  deployTx: process.env.CC_DEPLOY_TX || "",
+  commitId: process.env.CC_COMMIT_ID || "",
+  commitTx: process.env.CC_COMMIT_TX || "",
+  revealTx: process.env.CC_REVEAL_TX || "",
+  nonce: process.env.CC_NONCE || "",
+  onchainVerify: process.env.CC_ONCHAIN_VERIFY || "",
+  replay: process.env.CC_REPLAY || "",
+};
+
+if (process.env.CC_JSON_INCLUDE_PROMPT === "true") {
+  payload.prompt = process.env.CC_PROMPT || "";
+  payload.output = process.env.CC_OUTPUT || "";
+  payload.modelVersion = process.env.CC_MODEL_VERSION || "";
 }
-EOF
+
+process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
+NODE
   echo "[decision-cycle] wrote $json_out"
 fi
 
 reporter="$repo/scripts/integration/post-cycle-links.js"
 if [[ -n "$json_out" && -f "$reporter" ]]; then
   report_cmd=(node "$reporter" --artifact "$json_out" --title "$links_title")
+
+  if [[ "$links_include_prompt" == "true" ]]; then
+    report_cmd+=(--include-prompt --prompt-max-chars "$links_prompt_max_chars")
+    if [[ "$links_redact" == "false" ]]; then
+      report_cmd+=(--no-redact)
+    fi
+  fi
 
   if [[ -n "$links_out" ]]; then
     report_cmd+=(--out "$links_out")

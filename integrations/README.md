@@ -175,6 +175,36 @@ await client.reveal(Number(commitId), payload, nonce);
 
 ---
 
+### 6. OpenClaw Adapter (`openclaw/`)
+
+**Purpose**: Ingest standardized agent decision logs (Claude/Codex/Gemini/OpenClaw) and run ClawCommit decision cycles.
+
+**Use Case**: Convert provider-neutral run logs into canonical `prompt/output/modelVersion/nonce` payloads, then commit/reveal/replay with optional PR comment posting and artifact output.
+
+**Key Features**:
+- JSON schema for standardized decision logs
+- Adapter/validator converter (`convert-to-clawcommit.js`)
+- Wrapper CLI (`openclaw.js`) around canonical `decision_cycle.sh`
+- Supports redacted prompt/output reporting by default
+
+**Quick Start**:
+```bash
+node openclaw/convert-to-clawcommit.js \
+  --input ../artifacts/openclaw-run.json \
+  --out ../.clawcommit/decision.json
+
+node openclaw/openclaw.js \
+  --repo .. \
+  --network bscTestnet \
+  --contract "$CLAWCOMMIT_CONTRACT_TESTNET" \
+  --decision-json ../.clawcommit/decision.json \
+  --json-out ../.clawcommit/openclaw-cycle.json
+```
+
+**Documentation**: [openclaw/README.md](./openclaw/README.md)
+
+---
+
 ## Integration Comparison
 
 | Feature | GitHub Copilot | MCP Server | GitHub Action | TypeScript SDK | AI Schemas |

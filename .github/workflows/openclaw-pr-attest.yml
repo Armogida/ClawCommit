@@ -1,0 +1,107 @@
+name: OpenClaw PR Attestation (ClawCommit)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  attest:
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
+    runs-on: ubuntu-latest
+
+    env:
+      NETWORK: bscTestnet
+      RPC_URL: ${{ secrets.BSC_TESTNET_RPC_URL }}
+      CONTRACT: ${{ secrets.CLAWCOMMIT_CONTRACT_TESTNET }}
+      DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY_TESTNET }}
+      ALLOW_MAINNET_WRITES: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build standardized OpenClaw decision log
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          mkdir -p .clawcommit/openclaw
+          node - <<'NODE'
+          const fs = require("fs");
+          const crypto = require("crypto");
+
+          const prNumber = process.env.PR_NUMBER;
+          const title = process.env.PR_TITLE || "";
+          const body = process.env.PR_BODY || "";
+
+          const prompt = `OpenClaw PR gate\nPR #${prNumber}\nTitle: ${title}\n\nBody:\n${body}`.slice(0, 12000);
+
+          const log = {
+            sessionId: `gh-pr-${prNumber}-${process.env.GITHUB_RUN_ID}`,
+            agentId: "openclaw-github-actions",
+            eventType: "PR_APPROVAL",
+            timestamp: new Date().toISOString(),
+            prompt,
+            output: "PR_ATTESTED",
+            modelVersion: `openclaw-ci:${process.env.GITHUB_RUN_ID}`,
+            nonce: "0x" + crypto.randomBytes(32).toString("hex"),
+            metadata: {
+              repository: process.env.GITHUB_REPOSITORY,
+              actor: process.env.GITHUB_ACTOR,
+              ref: process.env.GITHUB_REF,
+              sha: process.env.GITHUB_SHA,
+              prNumber,
+              runId: process.env.GITHUB_RUN_ID,
+              runUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            },
+          };
+
+          fs.writeFileSync(
+            `.clawcommit/openclaw/pr-${prNumber}-run.json`,
+            JSON.stringify(log, null, 2) + "\n"
+          );
+          NODE
+
+      - name: Convert OpenClaw log to ClawCommit decision
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node integrations/openclaw/convert-to-clawcommit.js \
+            --input ".clawcommit/openclaw/pr-${PR_NUMBER}-run.json" \
+            --out ".clawcommit/openclaw/pr-${PR_NUMBER}-decision.json"
+
+      - name: Run decision cycle (commit + reveal + replay on testnet)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm run openclaw:attest -- \
+            --repo "$GITHUB_WORKSPACE" \
+            --network "$NETWORK" \
+            --rpc "$RPC_URL" \
+            --contract "$CONTRACT" \
+            --decision-json ".clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-decision.json" \
+            --json-out ".clawcommit/pr-${{ github.event.pull_request.number }}.json" \
+            --json-include-prompt \
+            --links-out ".clawcommit/pr-${{ github.event.pull_request.number }}.md" \
+            --post-gh-pr "${{ github.event.pull_request.number }}" \
+            --gh-repo "${{ github.repository }}" \
+            --links-title "ClawCommit PR Attestation" \
+            --links-include-prompt
+
+      - name: Upload decision artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clawcommit-pr-${{ github.event.pull_request.number }}
+          path: .clawcommit/

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenClaw Decision Log",
+  "type": "object",
+  "required": [
+    "sessionId",
+    "agentId",
+    "eventType",
+    "timestamp",
+    "prompt",
+    "output",
+    "modelVersion",
+    "nonce"
+  ],
+  "properties": {
+    "sessionId": {
+      "type": "string",
+      "description": "The agent run or OpenClaw session identifier."
+    },
+    "agentId": {
+      "type": "string",
+      "description": "The unique agent (or role) making the decision."
+    },
+    "eventType": {
+      "type": "string",
+      "description": "The type of decision event (for example PR_APPROVAL, MERGE_GATE, DEPLOY_DECISION)."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the decision was made."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "Canonical prompt that drove the decision."
+    },
+    "output": {
+      "type": "string",
+      "description": "Decision output (for example APPROVE, REJECT, EXECUTE)."
+    },
+    "modelVersion": {
+      "type": "string",
+      "description": "Model identifier/version used to generate the decision."
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{64}$",
+      "description": "Random 32-byte hex nonce used in commit/reveal hashing."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional context map (PR number, branch, SHA, test summaries, provider metadata).",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -269,9 +269,15 @@ What is added:
 - SDK helpers: `buildOpenClawDecisionPayload`, `commitOpenClawDecision`, `revealOpenClawDecision`
 - MCP tools: `clawcommit_openclaw_build_payload`, `clawcommit_openclaw_commit`, `clawcommit_openclaw_reveal`
 - AI schemas for OpenAI/Anthropic/Gemini with matching OpenClaw tool definitions
+- OpenClaw adapter surface under `integrations/openclaw/`:
+  - `openclaw-decision.schema.json`
+  - `convert-to-clawcommit.js`
+  - `openclaw.js`
 - GitHub workflows:
   - `.github/workflows/openclaw-pr-commit.yml`
   - `.github/workflows/openclaw-merge-reveal.yml`
+  - `.github/workflows/openclaw-pr-attest.yml`
+  - `.github/workflows/openclaw-merge-attest.yml`
 
 Required repo secrets:
 - `CLAWCOMMIT_CONTRACT`
@@ -286,6 +292,24 @@ Safety defaults:
 - Writes default to `bscTestnet`.
 - Mainnet writes remain blocked unless explicitly enabled.
 - PR comments are redacted; full payload remains artifact-only.
+
+Adapter quick start:
+
+```bash
+node integrations/openclaw/convert-to-clawcommit.js \
+  --input artifacts/openclaw-run.json \
+  --out .clawcommit/decision.json
+
+npm run openclaw:attest -- \
+  --repo . \
+  --network bscTestnet \
+  --contract "$CLAWCOMMIT_CONTRACT_TESTNET" \
+  --decision-json .clawcommit/decision.json \
+  --json-out .clawcommit/openclaw-cycle.json \
+  --json-include-prompt \
+  --links-out .clawcommit/openclaw-cycle.md \
+  --links-include-prompt
+```
 
 ### 4. Replay Validator (Standalone)
 

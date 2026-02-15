@@ -23,6 +23,9 @@ Keep writes testnet-first and keep PR comments redacted.
 - Build using:
 `node scripts/integration/build-openclaw-payload.js --input <input.json> --out <payload.json>`
 
+For provider-neutral agent logs (Claude/Codex/Gemini/OpenClaw), first convert:
+`node integrations/openclaw/convert-to-clawcommit.js --input <openclaw-run.json> --out <decision.json>`
+
 3. Commit onchain (PR path).
 - Use local action (`integrations/github-action`) or CLI.
 - Persist `.clawcommit/openclaw/pr-<PR_NUMBER>-latest.json` with commit metadata and full payload.
@@ -53,6 +56,13 @@ Optional flags:
 - `--links-out <PATH>`
 - `--post-gh-pr <PR_NUMBER>` and `--gh-repo <OWNER/REPO>`
 - `--allow-mainnet-writes true` (explicit only)
+
+## Adapter Surface
+
+Use `integrations/openclaw/` for standardized ingestion:
+- `openclaw-decision.schema.json`
+- `convert-to-clawcommit.js`
+- `openclaw.js`
 
 ## References
 

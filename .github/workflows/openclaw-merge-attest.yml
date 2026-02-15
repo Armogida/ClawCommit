@@ -1,0 +1,107 @@
+name: OpenClaw Merge Attestation (ClawCommit)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  attest-mainnet:
+    runs-on: ubuntu-latest
+
+    env:
+      NETWORK: bscMainnet
+      RPC_URL: ${{ secrets.BSC_MAINNET_RPC_URL }}
+      CONTRACT: ${{ secrets.CLAWCOMMIT_CONTRACT_MAINNET }}
+      DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY_MAINNET }}
+      ALLOW_MAINNET_WRITES: ${{ secrets.ALLOW_MAINNET_WRITES }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Guard mainnet writes
+        run: |
+          if [ "$ALLOW_MAINNET_WRITES" != "true" ]; then
+            echo "ALLOW_MAINNET_WRITES != true; skipping on-chain writes."
+            exit 0
+          fi
+
+      - name: Build standardized OpenClaw merge log
+        run: |
+          mkdir -p .clawcommit/audit
+          node - <<'NODE'
+          const fs = require("fs");
+          const crypto = require("crypto");
+
+          const sha = process.env.GITHUB_SHA;
+          const log = {
+            sessionId: `gh-main-${sha}-${process.env.GITHUB_RUN_ID}`,
+            agentId: "openclaw-github-actions",
+            eventType: "MERGE_GATE",
+            timestamp: new Date().toISOString(),
+            prompt: `OpenClaw merge attestation\nCommit: ${sha}\nRepo: ${process.env.GITHUB_REPOSITORY}`,
+            output: "MERGE_TO_MAIN",
+            modelVersion: `openclaw-ci:${process.env.GITHUB_RUN_ID}`,
+            nonce: "0x" + crypto.randomBytes(32).toString("hex"),
+            metadata: {
+              repository: process.env.GITHUB_REPOSITORY,
+              actor: process.env.GITHUB_ACTOR,
+              sha,
+              runId: process.env.GITHUB_RUN_ID,
+              runUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            },
+          };
+
+          fs.writeFileSync(
+            `.clawcommit/audit/${sha}-run.json`,
+            JSON.stringify(log, null, 2) + "\n"
+          );
+          NODE
+
+      - name: Convert OpenClaw log to ClawCommit decision
+        run: |
+          node integrations/openclaw/convert-to-clawcommit.js \
+            --input ".clawcommit/audit/${GITHUB_SHA}-run.json" \
+            --out ".clawcommit/audit/${GITHUB_SHA}-decision.json"
+
+      - name: Run decision cycle (commit + reveal + replay on mainnet)
+        run: |
+          npm run openclaw:attest -- \
+            --repo "$GITHUB_WORKSPACE" \
+            --network "$NETWORK" \
+            --rpc "$RPC_URL" \
+            --contract "$CONTRACT" \
+            --allow-mainnet-writes true \
+            --decision-json ".clawcommit/audit/${GITHUB_SHA}-decision.json" \
+            --json-out ".clawcommit/audit/${GITHUB_SHA}.json" \
+            --json-include-prompt \
+            --links-out ".clawcommit/audit/${GITHUB_SHA}.md" \
+            --links-title "ClawCommit Merge Attestation" \
+            --links-include-prompt
+
+      - name: Commit audit report to repo
+        run: |
+          if [ "$ALLOW_MAINNET_WRITES" != "true" ]; then
+            exit 0
+          fi
+          git config user.name "clawcommit-bot"
+          git config user.email "clawcommit-bot@users.noreply.github.com"
+          git add \
+            ".clawcommit/audit/${GITHUB_SHA}.json" \
+            ".clawcommit/audit/${GITHUB_SHA}.md" \
+            ".clawcommit/audit/${GITHUB_SHA}-run.json" \
+            ".clawcommit/audit/${GITHUB_SHA}-decision.json"
+          git commit -m "chore(clawcommit): audit links for ${GITHUB_SHA}" || exit 0
+          git push

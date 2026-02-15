@@ -4,6 +4,8 @@
 
 Track CI validation decisions with deterministic OpenClaw payloads and ClawCommit commit-reveal proofs while keeping PR comments redacted.
 
+For multi-provider agent logs, standardize via `integrations/openclaw/openclaw-decision.schema.json` and convert with `integrations/openclaw/convert-to-clawcommit.js` before commit/reveal.
+
 ## Deterministic Rules
 
 1. Build payload from `{ modelVersion, context, validations[] }`.

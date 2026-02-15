@@ -37,6 +37,9 @@ function parseArgs(argv) {
     postGhPr: "",
     repo: "",
     appendStepSummary: false,
+    includePrompt: false,
+    promptMaxChars: 1200,
+    redact: true,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -56,6 +59,15 @@ function parseArgs(argv) {
         break;
       case "--repo":
         args.repo = argv[++i] || "";
+        break;
+      case "--include-prompt":
+        args.includePrompt = true;
+        break;
+      case "--prompt-max-chars":
+        args.promptMaxChars = Number(argv[++i] || "1200");
+        break;
+      case "--no-redact":
+        args.redact = false;
         break;
       case "--append-step-summary":
         args.appendStepSummary = true;
@@ -78,6 +90,61 @@ function parseArgs(argv) {
   }
 
   return args;
+}
+
+function redactIfNeeded(value, redact) {
+  if (!redact || !value) {
+    return value;
+  }
+
+  return String(value)
+    .replace(/0x[a-fA-F0-9]{64}/g, "0x[REDACTED_64HEX]")
+    .replace(
+      /(DEPLOYER_PRIVATE_KEY|PRIVATE_KEY|SECRET|TOKEN|API_KEY)\s*[:=]\s*[^\s]+/gi,
+      "$1=[REDACTED]"
+    )
+    .replace(
+      /-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----/g,
+      "[REDACTED_PRIVATE_KEY_BLOCK]"
+    );
+}
+
+function truncateText(value, maxChars) {
+  if (!value || typeof value !== "string") {
+    return value || "";
+  }
+  if (value.length <= maxChars) {
+    return value;
+  }
+  return `${value.slice(0, maxChars)}\n...(truncated, ${value.length} chars)`;
+}
+
+function renderPromptSection(artifact, opts) {
+  const prompt = typeof artifact.prompt === "string" ? artifact.prompt : "";
+  const output = typeof artifact.output === "string" ? artifact.output : "";
+  const modelVersion = typeof artifact.modelVersion === "string" ? artifact.modelVersion : "";
+
+  if (!prompt && !output && !modelVersion) {
+    return "";
+  }
+
+  const safePrompt = truncateText(redactIfNeeded(prompt, opts.redact), opts.promptMaxChars);
+  const safeOutput = truncateText(redactIfNeeded(output, opts.redact), opts.promptMaxChars);
+  const safeModel = redactIfNeeded(modelVersion, opts.redact);
+
+  return [
+    "",
+    "<details>",
+    "<summary><strong>Decision Payload (Prompt/Output)</strong></summary>",
+    "",
+    safeModel ? `**modelVersion:** \`${safeModel}\`` : "",
+    "",
+    safePrompt ? "```text\n" + safePrompt + "\n```" : "",
+    safeOutput ? "**output:**\n```text\n" + safeOutput + "\n```" : "",
+    "</details>",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function readArtifact(artifactPath) {
@@ -109,7 +176,7 @@ function addressLink(base, address) {
   return `${base}/address/${address}`;
 }
 
-function buildMarkdown({ artifactPath, artifact, title }) {
+function buildMarkdown({ artifactPath, artifact, title, opts }) {
   const explorerBase = getExplorerBase(artifact.network, artifact.chainId);
   const artifactLabel = path.relative(process.cwd(), artifactPath) || artifactPath;
   const deployTx = artifact.deployTx || artifact.deploymentTx || "";
@@ -119,6 +186,7 @@ function buildMarkdown({ artifactPath, artifact, title }) {
   const modelVersion = artifact.modelVersion || "n/a";
   const promptDigest = artifact.promptDigest || "n/a";
   const validationSummary = buildValidationSummary(artifact);
+  const promptSection = opts.includePrompt ? renderPromptSection(artifact, opts) : "";
 
   const lines = [
     `## ${title}`,
@@ -129,6 +197,7 @@ function buildMarkdown({ artifactPath, artifact, title }) {
     `- Deploy Tx: ${txLink(explorerBase, deployTx)}`,
     `- Commit Tx: ${txLink(explorerBase, commitTx)}`,
     `- Reveal Tx: ${txLink(explorerBase, revealTx)}`,
+    promptSection,
     "",
     "### Summary",
     `- Network: ${artifact.network || "n/a"}`,
@@ -214,6 +283,7 @@ function main() {
     artifactPath,
     artifact,
     title: args.title,
+    opts: args,
   });
 
   process.stdout.write(markdown);
