@@ -224,9 +224,10 @@ This writes:
 - `deployment-proof/commit-tx.txt`
 - `deployment-proof/reveal-tx.txt`
 
-## Merkle Batching (Wave 1)
+## Merkle Batching (Wave 2)
 
-Wave 1 adds root-level batch commitments through `ClawCommitBatch`.
+Wave 2 extends root-level commitments with multi-leaf reveal writes in one transaction.
+Wave 1 primitives remain fully backwards compatible.
 
 Batch leaf formula:
 
@@ -301,6 +302,17 @@ HARDHAT_NETWORK=bsc npx ts-node scripts/batch/revealLeaf.ts \
   --allow-mainnet-writes true
 ```
 
+### Reveal multiple leaves onchain (single transaction)
+
+```bash
+HARDHAT_NETWORK=bsc npx ts-node scripts/batch/revealLeaves.ts \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --batch-id 0 \
+  --leaf-indexes 0,2,3 \
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --allow-mainnet-writes true
+```
+
 ### Replay batch determinism
 
 Local (manifest-only):
@@ -364,7 +376,7 @@ Practical budgeting:
 - 100 committed and revealed decisions is roughly $25 at similar gas/BNB conditions.
 - Actual USD cost varies with BNB price and gas conditions.
 - BNB Chain was chosen for low fees and fast block times, so runaway costs are less likely for normal usage.
-- A future roadmap item is batch writes to further reduce per-decision costs.
+- Wave 2 batch writes (`revealBatchLeaves`) reduce per-leaf reveal overhead.
 
 Risks and overhead:
 
@@ -400,7 +412,7 @@ For MCP server setup, env configuration, testnet faucet steps, and terminal veri
 ## Repo Layout
 
 - `contracts/ClawCommit.sol` - V2 deterministic commit-reveal contract
-- `contracts/ClawCommitBatch.sol` - Wave 1 Merkle batch root commitment contract
+- `contracts/ClawCommitBatch.sol` - Wave 2 Merkle batch commitment + multi-reveal contract
 - `scripts/deploy.ts` - deploy script
 - `scripts/commit.ts` - commit CLI
 - `scripts/reveal.ts` - reveal CLI
@@ -409,6 +421,7 @@ For MCP server setup, env configuration, testnet faucet steps, and terminal veri
 - `scripts/batch/recomputeRoot.ts` - deterministic root recomputation
 - `scripts/batch/commitBatch.ts` - batch root commit script
 - `scripts/batch/getBatch.ts` - batch read script
+- `scripts/batch/revealLeaves.ts` - batch multi-leaf reveal script
 - `scripts/deployAndProve.ts` - one-shot deploy + proof files
 - `scripts/verifyContract.ts` - BscScan verification helper
 - `backend/aiPipeline.ts` - AI decision lifecycle demo

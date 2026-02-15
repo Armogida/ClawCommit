@@ -3,12 +3,14 @@ pragma solidity ^0.8.24;
 
 /**
  * @title ClawCommitBatch
- * @notice Wave 1 Merkle batching for deterministic AI decision commitments.
+ * @notice Wave 2 Merkle batching for deterministic AI decision commitments.
  */
 contract ClawCommitBatch {
     error ZeroRoot();
     error InvalidLeafCount();
     error OnlyBatchCommitter();
+    error EmptyRevealSet();
+    error RevealSetLengthMismatch();
     error LeafAlreadyRevealed();
     error LeafIndexOutOfRange();
     error LeafHashMismatch();
@@ -137,12 +139,55 @@ contract ClawCommitBatch {
     ) external {
         BatchCommitment storage batch = batches[batchId];
         if (batch.committer != msg.sender) revert OnlyBatchCommitter();
-        if (reveal.leafIndex >= batch.leafCount) revert LeafIndexOutOfRange();
+        _revealLeafWithProof(
+            batchId,
+            uint256(batch.leafCount),
+            batch.merkleRoot,
+            batch.modelVersion,
+            reveal,
+            proof
+        );
+    }
+
+    function revealBatchLeaves(
+        uint256 batchId,
+        LeafRevealData[] calldata reveals,
+        MerkleProofData[] calldata proofs
+    ) external {
+        uint256 revealCount = reveals.length;
+        if (revealCount == 0) revert EmptyRevealSet();
+        if (revealCount != proofs.length) revert RevealSetLengthMismatch();
+
+        BatchCommitment storage batch = batches[batchId];
+        if (batch.committer != msg.sender) revert OnlyBatchCommitter();
+        uint256 leafCount = uint256(batch.leafCount);
+        bytes32 merkleRoot = batch.merkleRoot;
+        string memory modelVersion = batch.modelVersion;
+
+        for (uint256 i = 0; i < revealCount; i++) {
+            _revealLeafWithProof(
+                batchId,
+                leafCount,
+                merkleRoot,
+                modelVersion,
+                reveals[i],
+                proofs[i]
+            );
+        }
+    }
+
+    function _revealLeafWithProof(
+        uint256 batchId,
+        uint256 leafCount,
+        bytes32 merkleRoot,
+        string memory modelVersion,
+        LeafRevealData calldata reveal,
+        MerkleProofData calldata proof
+    ) internal {
+        if (reveal.leafIndex >= leafCount) revert LeafIndexOutOfRange();
         if (revealedLeaves[batchId][reveal.leafIndex].revealed) revert LeafAlreadyRevealed();
         if (proof.siblings.length != proof.path.length) revert ProofLengthMismatch();
 
-        string memory modelVersion = batch.modelVersion;
-        bytes32 merkleRoot = batch.merkleRoot;
         bytes32 leafHash = keccak256(
             abi.encode(
                 reveal.prompt,

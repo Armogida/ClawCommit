@@ -166,9 +166,9 @@ Required env vars:
 - `DEPLOYER_PRIVATE_KEY`
 - `BSCSCAN_API_KEY`
 
-## 7. Merkle Batching (Wave 1)
+## 7. Merkle Batching (Wave 2)
 
-Wave 1 introduces root-level batch commitments in `contracts/ClawCommitBatch.sol`.
+Wave 2 keeps Wave 1 root commitments and adds multi-leaf reveal writes in one transaction.
 
 ### Batch commitment interface
 
@@ -176,6 +176,7 @@ Wave 1 introduces root-level batch commitments in `contracts/ClawCommitBatch.sol
 - `getBatch(uint256 batchId) returns (BatchCommitment)`
 - `computeLeafHash(string prompt, string output, string modelVersion, string nonce, uint256 leafIndex) returns (bytes32)`
 - `revealBatchLeaf(uint256 batchId, LeafRevealData reveal, MerkleProofData proof)` stores a revealed leaf only if its proof reconstructs the batch root
+- `revealBatchLeaves(uint256 batchId, LeafRevealData[] reveals, MerkleProofData[] proofs)` reveals multiple leaves atomically in one tx
 - `verifyBatchInclusion(uint256 batchId, bytes32 leafHash, bytes32[] siblings, bool[] path) returns (bool)`
 
 ### Canonical hashing rules
@@ -191,13 +192,14 @@ Wave 1 introduces root-level batch commitments in `contracts/ClawCommitBatch.sol
 
 ### Manifest and tooling
 
-Wave 1 scripts:
+Wave 2 scripts:
 - `scripts/batch/build.ts` - build `clawcommit-batch-v1` manifest from NDJSON.
 - `scripts/batch/recomputeRoot.ts` - recompute and validate manifest root.
 - `scripts/batch/commitBatch.ts` - commit root onchain.
 - `scripts/batch/getBatch.ts` - read committed batch metadata.
 - `scripts/batch/generateProof.ts` - generate Merkle proof for a specific leaf.
 - `scripts/batch/revealLeaf.ts` - reveal a leaf onchain with proof.
+- `scripts/batch/revealLeaves.ts` - reveal multiple leaves onchain in one transaction.
 - `scripts/batch/replayBatch.ts` - deterministic batch replay locally or against onchain batch metadata.
 
 Commands:
@@ -228,6 +230,13 @@ HARDHAT_NETWORK=bsc npx ts-node scripts/batch/revealLeaf.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --batch-id 0 \
   --leaf-index 1 \
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --allow-mainnet-writes true
+
+HARDHAT_NETWORK=bsc npx ts-node scripts/batch/revealLeaves.ts \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --batch-id 0 \
+  --leaf-indexes 0,2,3 \
   --manifest artifacts/batches/batch-001.manifest.json \
   --allow-mainnet-writes true
 

@@ -24,6 +24,7 @@
     "batch:get": "HARDHAT_NETWORK=bscTestnet ts-node scripts/batch/getBatch.ts",
     "batch:proof": "ts-node scripts/batch/generateProof.ts",
     "batch:reveal-leaf": "HARDHAT_NETWORK=bscTestnet ts-node scripts/batch/revealLeaf.ts",
+    "batch:reveal-leaves": "HARDHAT_NETWORK=bscTestnet ts-node scripts/batch/revealLeaves.ts",
     "batch:replay": "ts-node scripts/batch/replayBatch.ts",
     "batch:demo:local": "bash scripts/batch/demoLocal.sh",
     "mcp:setup": "bash integrations/mcp-server/setup-local.sh",
