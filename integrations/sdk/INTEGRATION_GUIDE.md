@@ -13,7 +13,7 @@ This guide walks through integrating the ClawCommit SDK into various AI tools an
 
 ## Prerequisites
 
-- Node.js 18.0.0 or higher
+- Node.js 20.x recommended for this repository CI baseline
 - TypeScript 5.0+ (recommended)
 - BNB Chain RPC access
 - Private key with BNB for gas (for write operations)
@@ -81,12 +81,12 @@ async function commitDecision(decision: string) {
 // Reveal a decision
 async function revealDecision(commitId: string) {
   const { decision, nonce } = await database.getCommitment(commitId);
-  return await claw.reveal(parseInt(commitId), decision, nonce);
+  return await claw.reveal(commitId, decision, nonce);
 }
 
 // Verify a decision
 async function verifyDecision(commitId: string) {
-  return await claw.verify(parseInt(commitId));
+  return await claw.verify(commitId);
 }
 ```
 
@@ -131,7 +131,7 @@ app.post("/api/reveal/:commitId", async (req, res) => {
     const { commitId } = req.params;
     const { decision, nonce } = await db.getCommitment(commitId);
 
-    const result = await claw.reveal(parseInt(commitId), decision, nonce);
+    const result = await claw.reveal(commitId, decision, nonce);
 
     res.json({
       success: true,
@@ -149,7 +149,7 @@ app.post("/api/reveal/:commitId", async (req, res) => {
 app.get("/api/verify/:commitId", async (req, res) => {
   try {
     const { commitId } = req.params;
-    const proof = await claw.verify(parseInt(commitId));
+    const proof = await claw.verify(commitId);
 
     res.json({
       success: true,
@@ -262,7 +262,7 @@ async function main() {
 
     case "reveal":
       const revealResult = await claw.reveal(
-        parseInt(args[0]),
+        args[0],
         args[1],
         args[2]
       );
@@ -270,7 +270,7 @@ async function main() {
       break;
 
     case "verify":
-      const verifyResult = await claw.verify(parseInt(args[0]));
+      const verifyResult = await claw.verify(args[0]);
       console.log(JSON.stringify(verifyResult));
       break;
   }
@@ -327,7 +327,7 @@ class ClawCommitTool extends Tool {
         return `Committed with ID ${result.commitId}. Nonce: ${result.nonce}`;
 
       case "verify":
-        const proof = await this.claw.verify(parseInt(args[0]));
+        const proof = await this.claw.verify(args[0]);
         return `Verified: ${proof.verified}. Decision: ${proof.decision}`;
 
       default:

@@ -183,6 +183,9 @@ npx ts-node scripts/batch/generateProof.ts \
   --out artifacts/batches/batch-001-leaf-1.proof.json
 ```
 
+`scripts/batch/generateProof.ts` blocks sensitive stdout by default.
+Use `--out <path>` (recommended) or explicitly pass `--log-sensitive true`.
+
 ### Reveal a batch leaf onchain (with proof)
 
 ```bash
@@ -190,7 +193,8 @@ HARDHAT_NETWORK=bsc npx ts-node scripts/batch/revealLeaf.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --batch-id 0 \
   --leaf-index 1 \
-  --manifest artifacts/batches/batch-001.manifest.json
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --allow-mainnet-writes true
 ```
 
 ### Replay batch determinism

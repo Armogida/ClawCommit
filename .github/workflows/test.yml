@@ -16,8 +16,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version-file: '.nvmrc'
           cache: 'npm'
+
+      - name: Enforce Node version
+        run: npm run check:node
 
       - name: Install dependencies
         run: npm ci
@@ -45,9 +48,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: integrations/sdk/package-lock.json
+
+      - name: Enforce Node version
+        run: npm run check:node
 
       - name: Install SDK dependencies
         run: npm ci --prefix integrations/sdk
@@ -70,9 +76,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: integrations/github-action/package-lock.json
+
+      - name: Enforce Node version
+        run: npm run check:node
 
       - name: Install GitHub Action dependencies
         run: npm ci --prefix integrations/github-action
@@ -94,9 +103,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: integrations/mcp-server/package-lock.json
+
+      - name: Enforce Node version
+        run: npm run check:node
 
       - name: Install MCP dependencies
         run: npm ci --prefix integrations/mcp-server
@@ -118,14 +130,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version-file: '.nvmrc'
           cache: 'npm'
+
+      - name: Enforce Node version
+        run: npm run check:node
 
       - name: Install root dependencies
         run: npm ci
 
       - name: Audit root runtime dependencies
         run: npm audit --omit=dev
+
+      - name: Install SDK dependencies
+        run: npm ci --prefix integrations/sdk
+
+      - name: Audit SDK dependencies
+        run: npm audit --prefix integrations/sdk
 
       - name: Install GitHub Action dependencies
         run: npm ci --prefix integrations/github-action
@@ -138,3 +159,41 @@ jobs:
 
       - name: Audit MCP server dependencies
         run: npm audit --prefix integrations/mcp-server
+
+  integration-testnet-e2e:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' && secrets.E2E_TESTNET_RPC_URL != '' && secrets.E2E_TESTNET_CONTRACT_ADDRESS != '' && secrets.E2E_TESTNET_PRIVATE_KEY != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Enforce Node version
+        run: npm run check:node
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install SDK dependencies
+        run: npm ci --prefix integrations/sdk
+
+      - name: Build SDK
+        run: npm run build --prefix integrations/sdk
+
+      - name: Install GitHub Action dependencies
+        run: npm ci --prefix integrations/github-action
+
+      - name: Install MCP dependencies
+        run: npm ci --prefix integrations/mcp-server
+
+      - name: Run testnet end-to-end flow
+        env:
+          TESTNET_RPC_URL: ${{ secrets.E2E_TESTNET_RPC_URL }}
+          TESTNET_CONTRACT_ADDRESS: ${{ secrets.E2E_TESTNET_CONTRACT_ADDRESS }}
+          TESTNET_PRIVATE_KEY: ${{ secrets.E2E_TESTNET_PRIVATE_KEY }}
+        run: node scripts/integration/testnet-e2e.js

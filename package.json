@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Deterministic AI Decision Commit-Reveal Protocol for BNB Chain",
   "scripts": {
+    "check:node": "node -e \"const major = Number(process.versions.node.split('.')[0]); if (major !== 20) { console.error('Unsupported Node.js version ' + process.versions.node + '. Use Node 20.x (see .nvmrc).'); process.exit(1); }\"",
     "compile": "hardhat compile",
     "test": "hardhat test",
     "test:gas": "REPORT_GAS=true hardhat test",
@@ -27,6 +28,9 @@
   },
   "keywords": ["bnb-chain", "bsc", "commit-reveal", "ai", "deterministic", "smart-contract"],
   "license": "MIT",
+  "engines": {
+    "node": "20.x"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@typechain/ethers-v6": "^0.5.0",

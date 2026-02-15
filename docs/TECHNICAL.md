@@ -92,7 +92,7 @@ Why this matters:
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.x (see `.nvmrc`)
 - npm
 
 ### Install and test
@@ -228,7 +228,8 @@ HARDHAT_NETWORK=bsc npx ts-node scripts/batch/revealLeaf.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --batch-id 0 \
   --leaf-index 1 \
-  --manifest artifacts/batches/batch-001.manifest.json
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --allow-mainnet-writes true
 
 npx ts-node scripts/batch/replayBatch.ts \
   --manifest artifacts/batches/batch-001.manifest.json \
@@ -236,3 +237,6 @@ npx ts-node scripts/batch/replayBatch.ts \
   --batch-id 0 \
   --network bsc
 ```
+
+Note: `scripts/batch/generateProof.ts` refuses sensitive stdout by default.
+Use `--out <path>` (recommended) or explicitly pass `--log-sensitive true`.

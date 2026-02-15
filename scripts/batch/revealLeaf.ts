@@ -1,15 +1,34 @@
 import { ethers } from "hardhat";
 import * as fs from "fs";
-import { BatchManifest, generateMerkleProof } from "./merkle";
+import {
+  BatchManifest,
+  ManifestValidationResult,
+  generateMerkleProof,
+  validateManifest,
+} from "./merkle";
+import {
+  assertMainnetWriteAllowed,
+  formatSensitive,
+  parseBooleanFlag,
+  parseNonNegativeBigInt,
+  requireAddress,
+} from "../common/safety";
 
 interface RevealLeafArgs {
   contract: string;
-  batchId: number;
-  leafIndex: number;
+  batchId: bigint;
+  leafIndex: bigint;
   manifestPath: string;
+  allowMainnetWrites: boolean;
+  logSensitive: boolean;
 }
 
-function parseArgs(argv: string[]): RevealLeafArgs {
+interface LoadedManifest {
+  manifest: BatchManifest;
+  validated: ManifestValidationResult;
+}
+
+export function parseArgs(argv: string[]): RevealLeafArgs {
   const get = (flag: string): string | undefined => {
     const idx = argv.indexOf(flag);
     return idx !== -1 ? argv[idx + 1] : undefined;
@@ -19,77 +38,90 @@ function parseArgs(argv: string[]): RevealLeafArgs {
   const batchIdStr = get("--batch-id");
   const leafIndexStr = get("--leaf-index");
   const manifestPath = get("--manifest");
+  const allowMainnetWrites = parseBooleanFlag(argv, "--allow-mainnet-writes");
+  const logSensitive = parseBooleanFlag(argv, "--log-sensitive");
 
   if (!contract || !batchIdStr || !leafIndexStr || !manifestPath) {
     throw new Error(
-      "Usage: HARDHAT_NETWORK=<NETWORK> npx ts-node scripts/batch/revealLeaf.ts --contract <ADDR> --batch-id <ID> --leaf-index <INDEX> --manifest <MANIFEST_JSON>"
+      "Usage: HARDHAT_NETWORK=<NETWORK> npx ts-node scripts/batch/revealLeaf.ts --contract <ADDR> --batch-id <ID> --leaf-index <INDEX> --manifest <MANIFEST_JSON> [--allow-mainnet-writes <true|false>] [--log-sensitive <true|false>]"
     );
   }
 
-  const batchId = parseInt(batchIdStr, 10);
-  const leafIndex = parseInt(leafIndexStr, 10);
-
-  if (isNaN(batchId) || batchId < 0) {
-    throw new Error("--batch-id must be a non-negative integer");
-  }
-
-  if (isNaN(leafIndex) || leafIndex < 0) {
-    throw new Error("--leaf-index must be a non-negative integer");
-  }
-
-  return { contract, batchId, leafIndex, manifestPath };
+  return {
+    contract: requireAddress(contract, "--contract"),
+    batchId: parseNonNegativeBigInt(batchIdStr, "--batch-id"),
+    leafIndex: parseNonNegativeBigInt(leafIndexStr, "--leaf-index"),
+    manifestPath,
+    allowMainnetWrites,
+    logSensitive,
+  };
 }
 
-function loadManifest(manifestPath: string): BatchManifest {
+export function loadManifest(manifestPath: string): LoadedManifest {
   const raw = fs.readFileSync(manifestPath, "utf8");
   const parsed = JSON.parse(raw) as BatchManifest;
+  const validated = validateManifest(parsed);
 
-  if (
-    parsed.version !== "clawcommit-batch-v1" ||
-    typeof parsed.root !== "string" ||
-    typeof parsed.leafCount !== "number" ||
-    typeof parsed.modelVersion !== "string" ||
-    !Array.isArray(parsed.leaves)
-  ) {
-    throw new Error("Invalid manifest format");
+  return {
+    manifest: validated.manifest,
+    validated,
+  };
+}
+
+function toSafeIndex(index: bigint, label: string): number {
+  if (index > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`${label} exceeds max safe JS integer range`);
   }
 
-  return parsed;
+  return Number(index);
 }
 
 async function main(): Promise<void> {
-  const { contract: contractAddress, batchId, leafIndex, manifestPath } = parseArgs(
-    process.argv.slice(2)
-  );
+  const {
+    contract: contractAddress,
+    batchId,
+    leafIndex,
+    manifestPath,
+    allowMainnetWrites,
+    logSensitive,
+  } = parseArgs(process.argv.slice(2));
 
-  const manifest = loadManifest(manifestPath);
+  const { manifest, validated } = loadManifest(manifestPath);
+  const chainId = (await ethers.provider.getNetwork()).chainId;
+  assertMainnetWriteAllowed(chainId, allowMainnetWrites, "batch reveal script");
 
-  // Find the leaf at the specified index
-  const leaf = manifest.leaves.find((l) => l.leafIndex === leafIndex);
+  const leafIndexNumber = toSafeIndex(leafIndex, "--leaf-index");
+  if (leafIndexNumber >= manifest.leafCount) {
+    throw new Error(
+      `Leaf index ${leafIndex.toString()} out of range [0, ${manifest.leafCount - 1}]`
+    );
+  }
+
+  const leaf = manifest.leaves[leafIndexNumber];
   if (!leaf) {
     throw new Error(
-      `Leaf index ${leafIndex} not found in manifest (available range: 0-${manifest.leafCount - 1})`
+      `Leaf index ${leafIndex.toString()} not found in manifest (available range: 0-${
+        manifest.leafCount - 1
+      })`
     );
   }
 
   console.log("\nRevealing batch leaf...");
-  console.log("Batch ID:   ", batchId);
-  console.log("Leaf Index: ", leafIndex);
-  console.log(
-    "Prompt:     ",
-    leaf.prompt.length > 60 ? leaf.prompt.slice(0, 60) + "..." : leaf.prompt
-  );
-  console.log(
-    "Output:     ",
-    leaf.output.length > 60 ? leaf.output.slice(0, 60) + "..." : leaf.output
-  );
-  console.log("Nonce:      ", leaf.nonce);
+  console.log("Batch ID:   ", batchId.toString());
+  console.log("Leaf Index: ", leafIndex.toString());
+  console.log("Prompt:     ", formatSensitive(leaf.prompt, logSensitive));
+  console.log("Output:     ", formatSensitive(leaf.output, logSensitive));
+  console.log("Nonce:      ", formatSensitive(leaf.nonce, logSensitive));
+  if (!logSensitive) {
+    console.log("Sensitive fields are redacted. Use --log-sensitive true in trusted environments.");
+  }
+  console.log("Manifest Hash:", validated.manifestHash);
   console.log("");
 
   const Factory = await ethers.getContractFactory("ClawCommitBatch");
   const contract = Factory.attach(contractAddress);
   const leafHashes = manifest.leaves.map((entry) => entry.leafHash);
-  const proof = generateMerkleProof(leafHashes, leafIndex);
+  const proof = generateMerkleProof(leafHashes, leafIndexNumber);
 
   const tx = await contract.revealBatchLeaf(
     batchId,
@@ -143,24 +175,26 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  console.error("\n✗ Reveal failed:", error.message || error);
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("\n✗ Reveal failed:", error.message || error);
 
-  if (error.message?.includes("OnlyBatchCommitter")) {
-    console.error("Hint: Only the original batch committer can reveal leaves.");
-  } else if (error.message?.includes("LeafAlreadyRevealed")) {
-    console.error("Hint: This leaf has already been revealed.");
-  } else if (error.message?.includes("LeafIndexOutOfRange")) {
-    console.error("Hint: The leaf index exceeds the batch leaf count.");
-  } else if (error.message?.includes("LeafHashMismatch")) {
-    console.error("Hint: The provided data does not match the committed leaf hash.");
-  } else if (error.message?.includes("ProofLengthMismatch")) {
-    console.error("Hint: Merkle proof siblings/path arrays are malformed.");
-  } else if (error.message?.includes("insufficient funds")) {
-    console.error("Hint: Account needs gas tokens for transaction fees.");
-  } else if (error.message?.includes("could not detect network")) {
-    console.error("Hint: Check RPC URL in .env or --network flag.");
-  }
+    if (error.message?.includes("OnlyBatchCommitter")) {
+      console.error("Hint: Only the original batch committer can reveal leaves.");
+    } else if (error.message?.includes("LeafAlreadyRevealed")) {
+      console.error("Hint: This leaf has already been revealed.");
+    } else if (error.message?.includes("LeafIndexOutOfRange")) {
+      console.error("Hint: The leaf index exceeds the batch leaf count.");
+    } else if (error.message?.includes("LeafHashMismatch")) {
+      console.error("Hint: The provided data does not match the committed leaf hash.");
+    } else if (error.message?.includes("ProofLengthMismatch")) {
+      console.error("Hint: Merkle proof siblings/path arrays are malformed.");
+    } else if (error.message?.includes("insufficient funds")) {
+      console.error("Hint: Account needs gas tokens for transaction fees.");
+    } else if (error.message?.includes("could not detect network")) {
+      console.error("Hint: Check RPC URL in .env or --network flag.");
+    }
 
-  process.exit(1);
-});
+    process.exit(1);
+  });
+}

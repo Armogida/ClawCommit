@@ -25,6 +25,14 @@ function question(query: string): Promise<string> {
   });
 }
 
+function parseCommitIdInput(raw: string): bigint | null {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+  return BigInt(trimmed);
+}
+
 async function main() {
   console.log("\n╔═══════════════════════════════════════════════════╗");
   console.log("║     ClawCommit SDK - Quick Start Guide          ║");
@@ -155,7 +163,7 @@ async function getCommitCount(claw: ClawCommit) {
   const count = await claw.getCommitCount();
   console.log("Total commitments:", count);
 
-  if (count === 0) {
+  if (count === 0n) {
     console.log("\nNo commitments yet. Create one with option 5!");
   }
 }
@@ -164,19 +172,19 @@ async function viewCommitment(claw: ClawCommit) {
   console.log("\n=== View Commitment ===\n");
 
   const count = await claw.getCommitCount();
-  console.log(`Available commits: 0 to ${count - 1}`);
+  console.log(`Available commits: 0 to ${(count - 1n).toString()}`);
 
   const commitIdStr = await question("Enter commit ID: ");
-  const commitId = parseInt(commitIdStr);
+  const commitId = parseCommitIdInput(commitIdStr);
 
-  if (isNaN(commitId) || commitId < 0 || commitId >= count) {
+  if (commitId === null || commitId >= count) {
     console.log("✗ Invalid commit ID");
     return;
   }
 
   const commitment = await claw.getCommitment(commitId);
 
-  console.log("\nCommitment", commitId, ":");
+  console.log("\nCommitment", commitId.toString(), ":");
   console.log("  Hash:", commitment.hash);
   console.log("  Committer:", commitment.committer);
   console.log("  Timestamp:", new Date(Number(commitment.timestamp) * 1000).toISOString());
@@ -192,12 +200,12 @@ async function verifyCommitment(claw: ClawCommit) {
   console.log("\n=== Verify Commitment ===\n");
 
   const count = await claw.getCommitCount();
-  console.log(`Available commits: 0 to ${count - 1}`);
+  console.log(`Available commits: 0 to ${(count - 1n).toString()}`);
 
   const commitIdStr = await question("Enter commit ID to verify: ");
-  const commitId = parseInt(commitIdStr);
+  const commitId = parseCommitIdInput(commitIdStr);
 
-  if (isNaN(commitId) || commitId < 0 || commitId >= count) {
+  if (commitId === null || commitId >= count) {
     console.log("✗ Invalid commit ID");
     return;
   }
@@ -244,12 +252,12 @@ async function revealCommitment(claw: ClawCommit) {
   console.log("\n=== Reveal Commitment ===\n");
 
   const count = await claw.getCommitCount();
-  console.log(`Available commits: 0 to ${count - 1}`);
+  console.log(`Available commits: 0 to ${(count - 1n).toString()}`);
 
   const commitIdStr = await question("Enter commit ID to reveal: ");
-  const commitId = parseInt(commitIdStr);
+  const commitId = parseCommitIdInput(commitIdStr);
 
-  if (isNaN(commitId) || commitId < 0 || commitId >= count) {
+  if (commitId === null || commitId >= count) {
     console.log("✗ Invalid commit ID");
     return;
   }

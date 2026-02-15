@@ -39,16 +39,16 @@ class AIAgentLogger {
       throw new Error(`Nonce not found for commit ${commitId}`);
     }
 
-    const commitment = await this.claw.getCommitment(parseInt(commitId));
+    const commitment = await this.claw.getCommitment(commitId);
     const decisionStr = commitment.decision;
 
-    await this.claw.reveal(parseInt(commitId), decisionStr, nonce);
+    await this.claw.reveal(commitId, decisionStr, nonce);
 
     console.log(`Decision ${commitId} revealed and verified`);
   }
 
   async auditDecision(commitId: string): Promise<any> {
-    const proof = await this.claw.verify(parseInt(commitId));
+    const proof = await this.claw.verify(commitId);
 
     return {
       decision: JSON.parse(proof.decision),
@@ -88,7 +88,7 @@ class TradingBotLogger {
     console.log(`Executing ${tradeParams.action} ${tradeParams.amount} ${tradeParams.symbol}`);
 
     // 3. Reveal commitment
-    await this.claw.reveal(parseInt(commit.commitId), decision, commit.nonce);
+    await this.claw.reveal(commit.commitId, decision, commit.nonce);
 
     return {
       tradeId,
@@ -98,7 +98,7 @@ class TradingBotLogger {
   }
 
   async verifyTrade(commitId: string): Promise<boolean> {
-    const proof = await this.claw.verify(parseInt(commitId));
+    const proof = await this.claw.verify(commitId);
     return proof.verified;
   }
 }
@@ -209,7 +209,7 @@ class MultiSigDecisionSystem {
       const [signerId, claw] = Array.from(this.claws.entries())[i];
 
       console.log(`Revealing signature from ${signerId}...`);
-      await claw.reveal(parseInt(commitId), decision, nonce);
+      await claw.reveal(commitId, decision, nonce);
     }
   }
 }
@@ -245,7 +245,7 @@ class TimeLockedDecisions {
     for (const [commitId, pending] of this.pendingReveals) {
       if (now >= pending.revealAt) {
         console.log(`Revealing time-locked commitment ${commitId}...`);
-        await this.claw.reveal(parseInt(commitId), pending.decision, pending.nonce);
+        await this.claw.reveal(commitId, pending.decision, pending.nonce);
         this.pendingReveals.delete(commitId);
       }
     }
@@ -289,7 +289,7 @@ class DecisionChain {
     console.log(`Revealing chain of ${this.chain.length} decisions...`);
 
     for (const entry of this.chain) {
-      await this.claw.reveal(parseInt(entry.commitId), entry.decision, entry.nonce);
+      await this.claw.reveal(entry.commitId, entry.decision, entry.nonce);
       console.log(`  Revealed ${entry.commitId}`);
     }
   }
@@ -299,7 +299,7 @@ class DecisionChain {
 
     for (let i = 0; i < this.chain.length; i++) {
       const entry = this.chain[i];
-      const proof = await this.claw.verify(parseInt(entry.commitId));
+      const proof = await this.claw.verify(entry.commitId);
 
       if (!proof.verified) {
         console.log(`Chain broken at index ${i}`);
@@ -358,7 +358,7 @@ class BatchCommitProcessor {
     console.log(`Revealing batch of ${commitments.length} commitments...`);
 
     for (const { commitId, decision, nonce } of commitments) {
-      await this.claw.reveal(parseInt(commitId), decision, nonce);
+      await this.claw.reveal(commitId, decision, nonce);
 
       // Small delay between transactions
       await new Promise(resolve => setTimeout(resolve, 1000));

@@ -1,6 +1,13 @@
 import { readFileSync } from "fs";
-import { ethers, JsonRpcProvider } from "ethers";
-import { computeLeafHash, computeMerkleRoot, BatchManifest } from "./merkle";
+import { Contract, JsonRpcProvider } from "ethers";
+import {
+  BatchManifest,
+  ManifestValidationResult,
+  computeLeafHash,
+  computeMerkleRoot,
+  validateManifest,
+} from "./merkle";
+import { parseNonNegativeBigInt, requireAddress } from "../common/safety";
 
 const BATCH_ABI = [
   "function getBatch(uint256 batchId) external view returns (tuple(bytes32 merkleRoot, uint32 leafCount, uint64 timestamp, address committer, string modelVersion, bytes32 manifestHash))",
@@ -9,15 +16,20 @@ const BATCH_ABI = [
 interface ReplayArgs {
   manifestPath: string;
   contractAddress?: string;
-  batchId?: number;
+  batchId?: bigint;
   network?: string;
   local: boolean;
 }
 
-function parseArgs(argv: string[]): ReplayArgs {
+interface LoadedManifest {
+  manifest: BatchManifest;
+  validated: ManifestValidationResult;
+}
+
+export function parseArgs(argv: string[]): ReplayArgs {
   let manifestPath = "";
   let contractAddress: string | undefined;
-  let batchId: number | undefined;
+  let batchId: bigint | undefined;
   let network: string | undefined;
   let local = false;
 
@@ -25,9 +37,9 @@ function parseArgs(argv: string[]): ReplayArgs {
     if (argv[i] === "--manifest" && argv[i + 1]) {
       manifestPath = argv[++i];
     } else if (argv[i] === "--contract" && argv[i + 1]) {
-      contractAddress = argv[++i];
+      contractAddress = requireAddress(argv[++i], "--contract");
     } else if (argv[i] === "--batch-id" && argv[i + 1]) {
-      batchId = parseInt(argv[++i], 10);
+      batchId = parseNonNegativeBigInt(argv[++i], "--batch-id");
     } else if (argv[i] === "--network" && argv[i + 1]) {
       network = argv[++i];
     } else if (argv[i] === "--local") {
@@ -54,7 +66,7 @@ function parseArgs(argv: string[]): ReplayArgs {
   return { manifestPath, contractAddress, batchId, network, local };
 }
 
-function loadManifest(manifestPath: string): { raw: string; parsed: BatchManifest } {
+export function loadManifest(manifestPath: string): LoadedManifest {
   let raw: string;
   try {
     raw = readFileSync(manifestPath, "utf-8");
@@ -69,17 +81,8 @@ function loadManifest(manifestPath: string): { raw: string; parsed: BatchManifes
     throw new Error(`Invalid JSON in manifest file: ${manifestPath}`);
   }
 
-  if (
-    parsed.version !== "clawcommit-batch-v1" ||
-    typeof parsed.root !== "string" ||
-    typeof parsed.leafCount !== "number" ||
-    typeof parsed.modelVersion !== "string" ||
-    !Array.isArray(parsed.leaves)
-  ) {
-    throw new Error("Invalid manifest format");
-  }
-
-  return { raw, parsed };
+  const validated = validateManifest(parsed);
+  return { manifest: validated.manifest, validated };
 }
 
 async function main(): Promise<void> {
@@ -88,7 +91,7 @@ async function main(): Promise<void> {
   console.log("\n📦 Batch Replay Verification");
   console.log(`   Manifest: ${args.manifestPath}`);
 
-  const { raw, parsed: manifest } = loadManifest(args.manifestPath);
+  const { manifest, validated } = loadManifest(args.manifestPath);
 
   console.log(`   Leaves: ${manifest.leafCount}`);
   console.log(`   Model: ${manifest.modelVersion}`);
@@ -128,6 +131,7 @@ async function main(): Promise<void> {
     );
   }
   console.log(`   ✓ Merkle root verified: ${recomputedRoot.slice(0, 18)}...`);
+  console.log(`   ✓ Canonical manifest hash: ${validated.manifestHash}`);
 
   if (args.local) {
     console.log("\n✓ LOCAL REPLAY VERIFIED");
@@ -136,6 +140,7 @@ async function main(): Promise<void> {
   }
 
   const rpcUrls: Record<string, string> = {
+    localhost: "http://127.0.0.1:8545/",
     bsc: "https://bsc-dataseed.binance.org/",
     bscMainnet: "https://bsc-dataseed.binance.org/",
     bscTestnet: "https://data-seed-prebsc-1-s1.binance.org:8545/",
@@ -146,13 +151,13 @@ async function main(): Promise<void> {
     process.env.BSC_RPC_URL ||
     "https://bsc-dataseed.binance.org/";
   const provider = new JsonRpcProvider(rpcUrl);
-  const contract = new ethers.Contract(args.contractAddress!, BATCH_ABI, provider);
+  const contract = new Contract(args.contractAddress!, BATCH_ABI, provider);
 
   console.log("\n🔗 On-Chain Verification");
   console.log(`   Contract: ${args.contractAddress}`);
-  console.log(`   Batch ID: ${args.batchId}`);
+  console.log(`   Batch ID: ${args.batchId!.toString()}`);
 
-  const batch = await contract.getBatch(args.batchId);
+  const batch = await contract.getBatch(args.batchId!);
 
   if (batch.merkleRoot !== recomputedRoot) {
     throw new Error(
@@ -165,7 +170,7 @@ async function main(): Promise<void> {
   }
   console.log(`   ✓ On-chain Merkle root matches`);
 
-  const manifestHash = ethers.keccak256(ethers.toUtf8Bytes(raw));
+  const manifestHash = validated.manifestHash;
   if (batch.manifestHash !== manifestHash) {
     throw new Error(
       [
@@ -177,7 +182,7 @@ async function main(): Promise<void> {
   }
   console.log(`   ✓ Manifest hash matches`);
 
-  if (Number(batch.leafCount) !== manifest.leafCount) {
+  if (BigInt(batch.leafCount) !== BigInt(manifest.leafCount)) {
     throw new Error(
       `Leaf count mismatch: on-chain ${batch.leafCount}, manifest ${manifest.leafCount}`
     );
@@ -185,13 +190,15 @@ async function main(): Promise<void> {
   console.log(`   ✓ Leaf count matches: ${manifest.leafCount}`);
 
   console.log("\n✓ DETERMINISTIC BATCH REPLAY VERIFIED");
-  console.log(`   Batch ID: ${args.batchId}`);
+  console.log(`   Batch ID: ${args.batchId!.toString()}`);
   console.log(`   Root: ${recomputedRoot}`);
   console.log(`   Committer: ${batch.committer}`);
   console.log(`   Timestamp: ${new Date(Number(batch.timestamp) * 1000).toISOString()}`);
 }
 
-main().catch((error) => {
-  console.error("\n✗ ERROR:", error.message || error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("\n✗ ERROR:", error.message || error);
+    process.exit(1);
+  });
+}
