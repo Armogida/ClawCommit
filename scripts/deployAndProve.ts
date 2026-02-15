@@ -3,164 +3,198 @@ import { randomBytes } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 
+function computeDecisionHash(
+  prompt: string,
+  output: string,
+  modelVersion: string,
+  nonce: string
+): string {
+  const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["string", "string", "string", "string"],
+    [prompt, output, modelVersion, nonce]
+  );
+
+  return ethers.keccak256(encoded);
+}
+
+function writeProofFile(
+  proofDir: string,
+  filename: string,
+  firstLineValue: string,
+  metadata: Record<string, string>
+): void {
+  const lines = [firstLineValue, ...Object.entries(metadata).map(([k, v]) => `${k}=${v}`)];
+  fs.writeFileSync(path.join(proofDir, filename), `${lines.join("\n")}\n`);
+}
+
+function isMainnetNetworkName(name: string): boolean {
+  return name === "bsc" || name === "bscMainnet";
+}
+
 async function main(): Promise<void> {
-  const proofDir = path.join(__dirname, "..", "deployment-proof");
-  if (!fs.existsSync(proofDir)) {
-    fs.mkdirSync(proofDir, { recursive: true });
-  }
+  const proofDir = path.join(process.cwd(), "deployment-proof");
+  fs.mkdirSync(proofDir, { recursive: true });
 
-  console.log("=== ClawCommit BSC Mainnet Deployment + Proof ===\n");
+  console.log("=== ClawCommit V2 Deployment + Proof ===");
   console.log("Network:", network.name);
-  const chainId = (await ethers.provider.getNetwork()).chainId;
-  console.log("Chain ID:", chainId.toString());
 
-  // Balance check
+  const providerNetwork = await ethers.provider.getNetwork();
+  const chainId = providerNetwork.chainId.toString();
   const [deployer] = await ethers.getSigners();
+
   const balance = await ethers.provider.getBalance(deployer.address);
   console.log("Deployer:", deployer.address);
   console.log("Balance:", ethers.formatEther(balance), "BNB");
-  if (balance < ethers.parseEther("0.01")) {
-    console.warn("WARNING: Balance is low. Deployment may fail due to insufficient gas.");
-  }
 
-  // Step 1: Deploy
-  console.log("\n--- Step 1: Deploy Contract ---");
   const Factory = await ethers.getContractFactory("ClawCommit");
   const contract = await Factory.deploy();
   await contract.waitForDeployment();
 
   const contractAddress = await contract.getAddress();
-  const deployTx = contract.deploymentTransaction();
-  const deployTxHash = deployTx?.hash || "unknown";
+  const deployTxHash = contract.deploymentTransaction()?.hash || "";
 
-  console.log("Contract Address:", contractAddress);
-  console.log("Deploy Tx Hash:", deployTxHash);
+  console.log("Contract:", contractAddress);
+  console.log("Deploy Tx:", deployTxHash);
 
-  fs.writeFileSync(
-    path.join(proofDir, "mainnet-address.txt"),
-    `ClawCommit Contract Address (BSC Mainnet)\n` +
-    `Chain ID: ${chainId}\n` +
-    `Address: ${contractAddress}\n` +
-    `Explorer: https://bscscan.com/address/${contractAddress}\n` +
-    `Deploy Tx: ${deployTxHash}\n` +
-    `Timestamp: ${new Date().toISOString()}\n`
-  );
-
-  // Step 2: Example Commit
-  console.log("\n--- Step 2: Example Commit ---");
-  const decision = JSON.stringify({
-    prompt: "Evaluate BNB staking reward adjustment",
-    output: "APPROVE_RATE_INCREASE_5PCT",
-    modelVersion: "clawcommit-agent-v1.0",
-    timestamp: new Date().toISOString(),
+  writeProofFile(proofDir, "contract.txt", contractAddress, {
+    network: network.name,
+    chain_id: chainId,
+    explorer: `https://bscscan.com/address/${contractAddress}`,
+    generated_at: new Date().toISOString(),
   });
+
+  if (!deployTxHash) {
+    throw new Error("Deployment transaction hash unavailable");
+  }
+
+  writeProofFile(proofDir, "deploy-tx.txt", deployTxHash, {
+    contract: contractAddress,
+    explorer: `https://bscscan.com/tx/${deployTxHash}`,
+    generated_at: new Date().toISOString(),
+  });
+
+  const prompt = "Should ClawCommit publish deterministic replay verification for judges?";
+  const output = "APPROVE_REPLAY_VALIDATOR";
+  const modelVersion = "clawcommit-v2-demo";
   const nonce = randomBytes(32).toString("hex");
-  const hash = ethers.solidityPackedKeccak256(
-    ["string", "string"],
-    [decision, nonce]
-  );
+  const hash = computeDecisionHash(prompt, output, modelVersion, nonce);
 
-  console.log("Decision:", decision);
-  console.log("Nonce:", nonce);
-  console.log("Hash:", hash);
-
-  const commitTx = await contract.commit(hash);
+  console.log("Committing decision hash...");
+  const commitTx = await contract.commitDecision(hash);
   const commitReceipt = await commitTx.wait();
-  const commitTxHash = commitReceipt?.hash || "unknown";
-  console.log("Commit Tx Hash:", commitTxHash);
+  const commitTxHash = commitReceipt?.hash || "";
 
-  fs.writeFileSync(
-    path.join(proofDir, "commit-tx.txt"),
-    `ClawCommit Example Commit (BSC Mainnet)\n` +
-    `Contract: ${contractAddress}\n` +
-    `Commit ID: 0\n` +
-    `Decision: ${decision}\n` +
-    `Nonce: ${nonce}\n` +
-    `Hash: ${hash}\n` +
-    `Tx Hash: ${commitTxHash}\n` +
-    `Explorer: https://bscscan.com/tx/${commitTxHash}\n` +
-    `Timestamp: ${new Date().toISOString()}\n`
-  );
+  if (!commitTxHash) {
+    throw new Error("Commit transaction hash unavailable");
+  }
 
-  // Step 3: Reveal
-  console.log("\n--- Step 3: Reveal Decision ---");
-  const revealTx = await contract.reveal(0, decision, nonce);
-  const revealReceipt = await revealTx.wait();
-  const revealTxHash = revealReceipt?.hash || "unknown";
-  console.log("Reveal Tx Hash:", revealTxHash);
-
-  fs.writeFileSync(
-    path.join(proofDir, "reveal-tx.txt"),
-    `ClawCommit Example Reveal (BSC Mainnet)\n` +
-    `Contract: ${contractAddress}\n` +
-    `Commit ID: 0\n` +
-    `Decision: ${decision}\n` +
-    `Nonce: ${nonce}\n` +
-    `Tx Hash: ${revealTxHash}\n` +
-    `Explorer: https://bscscan.com/tx/${revealTxHash}\n` +
-    `Timestamp: ${new Date().toISOString()}\n`
-  );
-
-  // Step 4: Verify
-  console.log("\n--- Step 4: Replay Verification ---");
-  const commitment = await contract.getCommitment(0);
-  const replayHash = ethers.solidityPackedKeccak256(
-    ["string", "string"],
-    [commitment.decision, commitment.nonce]
-  );
-  const verified = replayHash === commitment.hash;
-  console.log("Replay Hash:", replayHash);
-  console.log("Stored Hash:", commitment.hash);
-  console.log("Verified:", verified);
-
-  const onchainVerified = await contract.verify(0);
-  console.log("On-chain verify():", onchainVerified);
-
-  // Write summary
-  const summary =
-    `=== ClawCommit Deployment Proof (BSC Mainnet) ===\n\n` +
-    `Network: BSC Mainnet (Chain ID ${chainId})\n` +
-    `Timestamp: ${new Date().toISOString()}\n\n` +
-    `Contract Address: ${contractAddress}\n` +
-    `Explorer: https://bscscan.com/address/${contractAddress}\n\n` +
-    `Deploy Tx: ${deployTxHash}\n` +
-    `  https://bscscan.com/tx/${deployTxHash}\n\n` +
-    `Commit Tx: ${commitTxHash}\n` +
-    `  https://bscscan.com/tx/${commitTxHash}\n\n` +
-    `Reveal Tx: ${revealTxHash}\n` +
-    `  https://bscscan.com/tx/${revealTxHash}\n\n` +
-    `Replay Verified: ${verified}\n` +
-    `On-chain Verified: ${onchainVerified}\n\n` +
-    `Decision: ${decision}\n` +
-    `Nonce: ${nonce}\n` +
-    `Hash: ${hash}\n`;
-
-  fs.writeFileSync(path.join(proofDir, "PROOF_SUMMARY.txt"), summary);
-
-  // Step 5: BscScan Verification
-  if (network.name !== "hardhat" && network.name !== "localhost") {
-    console.log("\n--- Step 5: BscScan Verification ---");
-    try {
-      console.log("Waiting 10s for BscScan indexing...");
-      await new Promise(r => setTimeout(r, 10000));
-      await run("verify:verify", { address: contractAddress, constructorArguments: [] });
-      console.log("Contract verified on BscScan.");
-    } catch (e: any) {
-      console.log("BscScan verification skipped:", e.message);
+  let commitId = BigInt(0);
+  if (commitReceipt) {
+    for (const log of commitReceipt.logs) {
+      try {
+        const parsed = contract.interface.parseLog({
+          topics: log.topics as string[],
+          data: log.data,
+        });
+        if (parsed?.name === "CommitCreated") {
+          commitId = parsed.args.commitId as bigint;
+          break;
+        }
+      } catch {
+        // ignore logs from other contracts
+      }
     }
   }
 
-  console.log("\n=== Proof artifacts written to deployment-proof/ ===");
-  console.log("Files:");
-  console.log("  deployment-proof/mainnet-address.txt");
+  console.log("Commit Tx:", commitTxHash);
+  console.log("Commit ID:", commitId.toString());
+
+  writeProofFile(proofDir, "commit-tx.txt", commitTxHash, {
+    contract: contractAddress,
+    commit_id: commitId.toString(),
+    hash,
+    explorer: `https://bscscan.com/tx/${commitTxHash}`,
+    generated_at: new Date().toISOString(),
+  });
+
+  console.log("Revealing decision...");
+  const revealTx = await contract.revealDecision(
+    commitId,
+    prompt,
+    output,
+    modelVersion,
+    nonce
+  );
+  const revealReceipt = await revealTx.wait();
+  const revealTxHash = revealReceipt?.hash || "";
+
+  if (!revealTxHash) {
+    throw new Error("Reveal transaction hash unavailable");
+  }
+
+  console.log("Reveal Tx:", revealTxHash);
+
+  writeProofFile(proofDir, "reveal-tx.txt", revealTxHash, {
+    contract: contractAddress,
+    commit_id: commitId.toString(),
+    prompt,
+    output,
+    model_version: modelVersion,
+    nonce,
+    explorer: `https://bscscan.com/tx/${revealTxHash}`,
+    generated_at: new Date().toISOString(),
+  });
+
+  const revealTxOnchain = await ethers.provider.getTransaction(revealTxHash);
+  if (!revealTxOnchain?.data) {
+    throw new Error("Unable to fetch reveal transaction for replay verification");
+  }
+
+  const decoded = contract.interface.parseTransaction({ data: revealTxOnchain.data });
+  if (!decoded || decoded.name !== "revealDecision") {
+    throw new Error("Reveal transaction does not call revealDecision");
+  }
+
+  const replayHash = computeDecisionHash(
+    decoded.args[1] as string,
+    decoded.args[2] as string,
+    decoded.args[3] as string,
+    decoded.args[4] as string
+  );
+
+  const commitment = await contract.getCommitment(decoded.args[0] as bigint);
+  if (replayHash !== commitment.hash) {
+    throw new Error("Replay verification failed: recomputed hash does not match onchain hash");
+  }
+
+  console.log("✓ Deterministic Replay Verified");
+  console.log("Commit hash matches reveal.");
+
+  if (isMainnetNetworkName(network.name)) {
+    try {
+      console.log("Verifying contract on BscScan...");
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+      await run("verify:verify", {
+        address: contractAddress,
+        constructorArguments: [],
+      });
+      console.log("Contract verified on BscScan.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log("BscScan verification skipped/failure:", message);
+    }
+  }
+
+  console.log("Proof artifacts written:");
+  console.log("  deployment-proof/contract.txt");
+  console.log("  deployment-proof/deploy-tx.txt");
   console.log("  deployment-proof/commit-tx.txt");
   console.log("  deployment-proof/reveal-tx.txt");
-  console.log("  deployment-proof/PROOF_SUMMARY.txt");
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(error);
+    console.error("Error:", error.message || error);
     process.exit(1);
   });

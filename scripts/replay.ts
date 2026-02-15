@@ -1,4 +1,4 @@
-import { AbiCoder, Contract, Interface, JsonRpcProvider, keccak256 } from "ethers";
+import { AbiCoder, Contract, Interface, JsonRpcProvider, Provider, keccak256 } from "ethers";
 
 const DEFAULT_BSC_RPC = "https://bsc-dataseed.binance.org/";
 
@@ -26,6 +26,11 @@ export interface ReplayVerificationResult {
   recomputedHash: string;
   storedHash: string;
   decodedReveal: DecodedRevealData;
+}
+
+export interface ReplayVerificationOptions {
+  rpcUrl?: string;
+  provider?: Provider;
 }
 
 export function computeDecisionHash(
@@ -81,9 +86,13 @@ export function parseArgs(argv: string[]): ReplayArgs {
 
 export async function verifyRevealTransaction(
   txHash: string,
-  rpcUrl?: string
+  options?: ReplayVerificationOptions
 ): Promise<ReplayVerificationResult> {
-  const provider = new JsonRpcProvider(rpcUrl || process.env.BSC_RPC_URL || DEFAULT_BSC_RPC);
+  const provider =
+    options?.provider ||
+    new JsonRpcProvider(
+      options?.rpcUrl || process.env.BSC_RPC_URL || DEFAULT_BSC_RPC
+    );
 
   const tx = await provider.getTransaction(txHash);
   if (!tx) {
@@ -144,7 +153,7 @@ export async function verifyRevealTransaction(
 
 async function main(): Promise<void> {
   const { txHash, rpcUrl } = parseArgs(process.argv.slice(2));
-  const result = await verifyRevealTransaction(txHash, rpcUrl);
+  const result = await verifyRevealTransaction(txHash, { rpcUrl });
 
   console.log(`Contract: ${result.contractAddress}`);
   console.log(`Commit ID: ${result.commitId.toString()}`);

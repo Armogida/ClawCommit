@@ -2,13 +2,13 @@ import { ethers } from "hardhat";
 import { randomBytes } from "crypto";
 
 /**
- * AI Decision Pipeline for ClawCommit
+ * AI Decision Pipeline for ClawCommit V2
  *
  * Demonstrates the full lifecycle:
- * 1. AI agent generates a decision (simulated)
+ * 1. AI agent generates a decision payload
  * 2. Agent computes deterministic hash with nonce
  * 3. Agent commits hash onchain
- * 4. Agent reveals decision onchain
+ * 4. Agent reveals prompt/output/modelVersion/nonce onchain
  * 5. Independent replay verification
  */
 
@@ -21,7 +21,9 @@ interface AIDecision {
 
 interface CommitRecord {
   commitId: bigint;
-  decision: string;
+  prompt: string;
+  output: string;
+  modelVersion: string;
   nonce: string;
   hash: string;
   txHash: string;
@@ -31,22 +33,24 @@ function generateNonce(): string {
   return randomBytes(32).toString("hex");
 }
 
-function serializeDecision(decision: AIDecision): string {
-  return JSON.stringify(decision);
-}
-
-function computeHash(decision: string, nonce: string): string {
-  return ethers.solidityPackedKeccak256(
-    ["string", "string"],
-    [decision, nonce]
+function computeDecisionHash(
+  prompt: string,
+  output: string,
+  modelVersion: string,
+  nonce: string
+): string {
+  const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["string", "string", "string", "string"],
+    [prompt, output, modelVersion, nonce]
   );
+  return ethers.keccak256(encoded);
 }
 
 async function simulateAIDecision(): Promise<AIDecision> {
   return {
     prompt: "Should we increase the staking reward rate?",
     output: "APPROVE_RATE_INCREASE_5PCT",
-    modelVersion: "clawcommit-agent-v1.0",
+    modelVersion: "clawcommit-agent-v2.0",
     timestamp: new Date().toISOString(),
   };
 }
@@ -58,15 +62,21 @@ async function commitDecision(
   const ClawCommit = await ethers.getContractFactory("ClawCommit");
   const contract = ClawCommit.attach(contractAddress);
 
-  const serialized = serializeDecision(decision);
   const nonce = generateNonce();
-  const hash = computeHash(serialized, nonce);
+  const hash = computeDecisionHash(
+    decision.prompt,
+    decision.output,
+    decision.modelVersion,
+    nonce
+  );
 
-  console.log("[COMMIT] Decision serialized:", serialized);
-  console.log("[COMMIT] Nonce generated:", nonce);
-  console.log("[COMMIT] Hash computed:", hash);
+  console.log("[COMMIT] Prompt:      ", decision.prompt);
+  console.log("[COMMIT] Output:      ", decision.output);
+  console.log("[COMMIT] ModelVersion:", decision.modelVersion);
+  console.log("[COMMIT] Nonce:       ", nonce);
+  console.log("[COMMIT] Hash:        ", hash);
 
-  const tx = await contract.commit(hash);
+  const tx = await contract.commitDecision(hash);
   const receipt = await tx.wait();
 
   let commitId = BigInt(0);
@@ -78,10 +88,11 @@ async function commitDecision(
           data: log.data,
         });
         if (parsed?.name === "CommitCreated") {
-          commitId = parsed.args.commitId;
+          commitId = parsed.args.commitId as bigint;
+          break;
         }
       } catch {
-        // skip
+        // skip non-contract logs
       }
     }
   }
@@ -91,7 +102,9 @@ async function commitDecision(
 
   return {
     commitId,
-    decision: serialized,
+    prompt: decision.prompt,
+    output: decision.output,
+    modelVersion: decision.modelVersion,
     nonce,
     hash,
     txHash: receipt?.hash || "",
@@ -107,15 +120,17 @@ async function revealDecision(
 
   console.log("\n[REVEAL] Revealing commit ID:", record.commitId.toString());
 
-  const tx = await contract.reveal(
+  const tx = await contract.revealDecision(
     record.commitId,
-    record.decision,
+    record.prompt,
+    record.output,
+    record.modelVersion,
     record.nonce
   );
   const receipt = await tx.wait();
 
   console.log("[REVEAL] Tx:", receipt?.hash);
-  console.log("[REVEAL] Decision is now public onchain.");
+  console.log("[REVEAL] Decision payload is now public onchain.");
 
   return receipt?.hash || "";
 }
@@ -130,16 +145,23 @@ async function replayVerify(
   const commitment = await contract.getCommitment(commitId);
 
   console.log("\n[REPLAY] Fetched commitment from chain:");
-  console.log("  Hash:     ", commitment.hash);
-  console.log("  Decision: ", commitment.decision);
-  console.log("  Nonce:    ", commitment.nonce);
-  console.log("  Revealed: ", commitment.revealed);
+  console.log("  Hash:        ", commitment.hash);
+  console.log("  Prompt:      ", commitment.prompt);
+  console.log("  Output:      ", commitment.output);
+  console.log("  ModelVersion:", commitment.modelVersion);
+  console.log("  Nonce:       ", commitment.nonce);
+  console.log("  Revealed:    ", commitment.revealed);
   console.log(
-    "  Timestamp:",
+    "  Timestamp:   ",
     new Date(Number(commitment.timestamp) * 1000).toISOString()
   );
 
-  const replayHash = computeHash(commitment.decision, commitment.nonce);
+  const replayHash = computeDecisionHash(
+    commitment.prompt,
+    commitment.output,
+    commitment.modelVersion,
+    commitment.nonce
+  );
 
   console.log("\n[REPLAY] Recomputed hash:", replayHash);
   console.log("[REPLAY] Stored hash:    ", commitment.hash);
@@ -151,37 +173,32 @@ async function replayVerify(
 }
 
 async function runPipeline(contractAddress: string): Promise<void> {
-  console.log("=== ClawCommit AI Decision Pipeline ===\n");
+  console.log("=== ClawCommit V2 AI Decision Pipeline ===\n");
 
-  // Step 1: Simulate AI decision
   console.log("--- Step 1: AI Agent Decision ---");
   const decision = await simulateAIDecision();
   console.log("Prompt:", decision.prompt);
   console.log("Output:", decision.output);
   console.log("Model:", decision.modelVersion);
+  console.log("Decision Timestamp:", decision.timestamp);
   console.log("");
 
-  // Step 2: Commit
   console.log("--- Step 2: Commit Decision Hash ---");
   const record = await commitDecision(contractAddress, decision);
   console.log("");
 
-  // Step 3: Reveal
   console.log("--- Step 3: Reveal Decision ---");
   await revealDecision(contractAddress, record);
 
-  // Step 4: Replay verify
   console.log("--- Step 4: Independent Replay Verification ---");
   const verified = await replayVerify(contractAddress, record.commitId);
 
-  // Summary
   console.log("\n=== Pipeline Complete ===");
   console.log("Commit ID:", record.commitId.toString());
-  console.log("Decision:", decision.output);
+  console.log("Output:", decision.output);
   console.log("Replay Verified:", verified);
 }
 
-// CLI entry point
 const args = process.argv.slice(2);
 const contractIdx = args.indexOf("--contract");
 if (contractIdx === -1) {

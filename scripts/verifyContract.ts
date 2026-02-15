@@ -5,7 +5,7 @@ async function main(): Promise<void> {
   const addrIdx = args.indexOf("--address");
 
   if (addrIdx === -1) {
-    console.error("Usage: npx hardhat run scripts/verifyContract.ts --network bscMainnet -- --address <CONTRACT_ADDRESS>");
+    console.error("Usage: npx hardhat run scripts/verifyContract.ts --network bsc -- --address <CONTRACT_ADDRESS>");
     process.exit(1);
   }
 
