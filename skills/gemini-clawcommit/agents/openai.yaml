@@ -1,0 +1,43 @@
+interface:
+  display_name: "Gemini ClawCommit"
+  short_description: "Automate the full ClawCommit decision cycle (commit, reveal, verify)."
+  default_prompt: "Run a full ClawCommit decision cycle with commit, reveal, and replay verification."
+tools:
+  - name: run_decision_cycle
+    description: "Runs a complete ClawCommit decision cycle, including commit, reveal, and replay verification."
+    args:
+      - name: contract_address
+        type: string
+        description: "The address of the deployed ClawCommit contract."
+        required: true
+      - name: prompt
+        type: string
+        description: "The AI prompt that led to the decision."
+        required: true
+      - name: output
+        type: string
+        description: "The AI's generated output/decision."
+        required: true
+      - name: model_version
+        type: string
+        description: "The version of the AI model used for the decision."
+        required: true
+      - name: network
+        type: string
+        description: "The blockchain network to use (e.g., bscTestnet, bsc)."
+        required: true
+        default: "bscTestnet"
+      - name: json_out_path
+        type: string
+        description: "Path to output a JSON summary of the decision cycle. Defaults to deployment-proof/decision-cycle-summary.json."
+        required: false
+        default: "deployment-proof/decision-cycle-summary.json"
+    command: |
+      bash skills/operate-clawcommit/scripts/decision_cycle.sh 
+        --repo "{{.workspace_dir}}" 
+        --contract "{{.contract_address}}" 
+        --prompt "{{.prompt}}" 
+        --output "{{.output}}" 
+        --model-version "{{.model_version}}" 
+        --network "{{.network}}" 
+        --json-out "{{.json_out_path}}"
