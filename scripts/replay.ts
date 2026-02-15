@@ -50,6 +50,9 @@ export function computeDecisionHash(
 export function decodeRevealTransactionData(data: string): DecodedRevealData {
   const iface = new Interface(CLAW_COMMIT_ABI);
   const revealFragment = iface.getFunction("revealDecision");
+  if (!revealFragment) {
+    throw new Error("Replay ABI missing revealDecision definition");
+  }
 
   if (!data.startsWith(revealFragment.selector)) {
     throw new Error("Transaction is not revealDecision(): wrong function selector");

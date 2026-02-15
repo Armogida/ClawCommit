@@ -1,7 +1,7 @@
-# ClawCommit — BSC Mainnet Deployment Record
+# ClawCommit — BSC Mainnet Deployment Record (V2)
 
 Contract Address: <To be filled after mainnet deployment>
-Explorer Link:    <To be filled after mainnet deployment>
+Explorer Link:    https://bscscan.com/address/<CONTRACT_ADDRESS>
 Deployment Tx:    <To be filled after mainnet deployment>
 
 ## Example Transactions
@@ -9,6 +9,7 @@ Deployment Tx:    <To be filled after mainnet deployment>
 Commit Tx:  <To be filled after mainnet deployment>
 Reveal Tx:  <To be filled after mainnet deployment>
 
-## Verification
+## Replay Verification
 
+Command: npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH>
 Replay Verified: <To be filled after mainnet deployment>
