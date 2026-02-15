@@ -8,8 +8,14 @@ inputs:
   action:
     description: 'Action to perform: commit, reveal, or verify'
     required: true
-  decision:
-    description: 'The AI decision string to commit'
+  prompt:
+    description: 'Prompt/context used to generate the AI decision'
+    required: false
+  output:
+    description: 'AI model output/decision string'
+    required: false
+  model-version:
+    description: 'Model version used to generate the output'
     required: false
   nonce:
     description: 'Nonce for commit/reveal (auto-generated if omitted for commit)'
@@ -32,7 +38,7 @@ outputs:
   commit-id:
     description: 'The commit ID from a commit operation'
   hash:
-    description: 'The keccak256 hash'
+    description: 'The deterministic decision hash'
   nonce:
     description: 'The nonce used'
   tx-hash:

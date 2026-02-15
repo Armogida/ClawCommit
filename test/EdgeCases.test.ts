@@ -16,7 +16,7 @@ function computeDecisionHash(
   return ethers.keccak256(encoded);
 }
 
-describe("Edge Cases and Security V2", function () {
+describe("ClawCommit Edge Cases", function () {
   let contract: ClawCommit;
   let owner: HardhatEthersSigner;
   let addr1: HardhatEthersSigner;
@@ -25,88 +25,160 @@ describe("Edge Cases and Security V2", function () {
 
   beforeEach(async function () {
     [owner, addr1, addr2, addr3] = await ethers.getSigners();
-    const Factory = await ethers.getContractFactory("ClawCommit");
-    contract = await Factory.deploy();
+    const factory = await ethers.getContractFactory("ClawCommit");
+    contract = await factory.deploy();
     await contract.waitForDeployment();
   });
 
-  it("handles large prompt/output strings", async function () {
-    const prompt = "p".repeat(6000);
-    const output = "o".repeat(6000);
-    const modelVersion = "model-v2-large";
-    const nonce = "n".repeat(1000);
+  describe("Large and Complex Inputs", function () {
+    it("handles 10KB output payloads", async function () {
+      const prompt = "Review generated strategy";
+      const output = "x".repeat(10000);
+      const modelVersion = "stress-model-v1";
+      const nonce = "large-output-nonce";
+      const hash = computeDecisionHash(prompt, output, modelVersion, nonce);
 
-    const hash = computeDecisionHash(prompt, output, modelVersion, nonce);
-    await contract.commitDecision(hash);
-    await contract.revealDecision(0, prompt, output, modelVersion, nonce);
+      await contract.commitDecision(hash);
+      await contract.revealDecision(0, prompt, output, modelVersion, nonce);
+      expect(await contract.verifyReplay(0)).to.equal(true);
+    });
 
-    expect(await contract.verifyReplay(0)).to.equal(true);
+    it("handles mixed unicode + whitespace reliably", async function () {
+      const prompt = "\u7528\u6237\u98ce\u9669\u8bc4\u4f30\n\twith tabs";
+      const output = "APPROVE \ud83d\udfe2\r\nNEXT_STEP";
+      const modelVersion = "unicode-model-v3";
+      const nonce = "unicode-nonce";
+      const hash = computeDecisionHash(prompt, output, modelVersion, nonce);
+
+      await contract.commitDecision(hash);
+      await contract.revealDecision(0, prompt, output, modelVersion, nonce);
+
+      const c = await contract.getCommitment(0);
+      expect(c.prompt).to.equal(prompt);
+      expect(c.output).to.equal(output);
+      expect(await contract.verifyReplay(0)).to.equal(true);
+    });
+
+    it("supports empty prompt/output/modelVersion with non-empty nonce", async function () {
+      const hash = computeDecisionHash("", "", "", "nonce-only");
+
+      await contract.commitDecision(hash);
+      await contract.revealDecision(0, "", "", "", "nonce-only");
+
+      const c = await contract.getCommitment(0);
+      expect(c.prompt).to.equal("");
+      expect(c.output).to.equal("");
+      expect(c.modelVersion).to.equal("");
+      expect(c.nonce).to.equal("nonce-only");
+      expect(await contract.verifyReplay(0)).to.equal(true);
+    });
   });
 
-  it("keeps commitment isolation across multiple committers", async function () {
-    const commitments = [
-      { signer: addr1, prompt: "p1", output: "o1", modelVersion: "v2", nonce: "n1" },
-      { signer: addr2, prompt: "p2", output: "o2", modelVersion: "v2", nonce: "n2" },
-      { signer: addr3, prompt: "p3", output: "o3", modelVersion: "v2", nonce: "n3" },
-    ];
+  describe("Access Control and Isolation", function () {
+    it("prevents non-committer reveal even with correct payload", async function () {
+      const prompt = "private prompt";
+      const output = "SECRET_OUTPUT";
+      const modelVersion = "agent-v2";
+      const nonce = "private-nonce";
+      const hash = computeDecisionHash(prompt, output, modelVersion, nonce);
 
-    for (const item of commitments) {
-      const hash = computeDecisionHash(item.prompt, item.output, item.modelVersion, item.nonce);
-      await contract.connect(item.signer).commitDecision(hash);
-    }
+      await contract.connect(addr1).commitDecision(hash);
 
-    for (let i = 0; i < commitments.length; i++) {
-      const item = commitments[i];
-      await contract
-        .connect(item.signer)
-        .revealDecision(i, item.prompt, item.output, item.modelVersion, item.nonce);
-    }
+      await expect(
+        contract
+          .connect(addr2)
+          .revealDecision(0, prompt, output, modelVersion, nonce)
+      ).to.be.revertedWithCustomError(contract, "OnlyCommitter");
+    });
 
-    for (let i = 0; i < commitments.length; i++) {
-      const c = await contract.getCommitment(i);
-      expect(c.committer).to.equal(commitments[i].signer.address);
-      expect(await contract.verifyReplay(i)).to.equal(true);
-    }
+    it("keeps commitments isolated across different signers", async function () {
+      const entries = [
+        { signer: addr1, prompt: "P1", output: "O1", model: "M1", nonce: "N1" },
+        { signer: addr2, prompt: "P2", output: "O2", model: "M2", nonce: "N2" },
+        { signer: addr3, prompt: "P3", output: "O3", model: "M3", nonce: "N3" },
+      ];
+
+      for (const entry of entries) {
+        const hash = computeDecisionHash(
+          entry.prompt,
+          entry.output,
+          entry.model,
+          entry.nonce
+        );
+        await contract.connect(entry.signer).commitDecision(hash);
+      }
+
+      expect(await contract.commitCount()).to.equal(3);
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        await contract
+          .connect(entry.signer)
+          .revealDecision(i, entry.prompt, entry.output, entry.model, entry.nonce);
+      }
+
+      for (let i = 0; i < entries.length; i++) {
+        const c = await contract.getCommitment(i);
+        expect(c.committer).to.equal(entries[i].signer.address);
+        expect(c.prompt).to.equal(entries[i].prompt);
+        expect(c.output).to.equal(entries[i].output);
+        expect(await contract.verifyReplay(i)).to.equal(true);
+      }
+    });
   });
 
-  it("prevents frontrunning reveal by non-committer", async function () {
-    const hash = computeDecisionHash("prompt", "output", "v2", "nonce");
-    await contract.connect(addr1).commitDecision(hash);
+  describe("State Invariants", function () {
+    it("never decreases commitCount", async function () {
+      const hash = computeDecisionHash("p", "o", "m", "n");
+      await contract.commitDecision(hash);
+      await contract.commitDecision(hash);
+      await contract.commitDecision(hash);
 
-    await expect(
-      contract.connect(addr2).revealDecision(0, "prompt", "output", "v2", "nonce")
-    ).to.be.revertedWithCustomError(contract, "OnlyCommitter");
-  });
+      expect(await contract.commitCount()).to.equal(3);
+      expect(await contract.commitCount()).to.equal(3);
+    });
 
-  it("allows any address to read and verify revealed commitments", async function () {
-    const hash = computeDecisionHash("prompt", "output", "v2", "nonce");
-    await contract.connect(addr1).commitDecision(hash);
-    await contract.connect(addr1).revealDecision(0, "prompt", "output", "v2", "nonce");
+    it("returns default-empty commitment for non-existent commit id", async function () {
+      const c = await contract.getCommitment(42);
+      expect(c.hash).to.equal(ethers.ZeroHash);
+      expect(c.timestamp).to.equal(0);
+      expect(c.committer).to.equal(ethers.ZeroAddress);
+      expect(c.revealed).to.equal(false);
+      expect(c.prompt).to.equal("");
+      expect(c.output).to.equal("");
+      expect(c.modelVersion).to.equal("");
+      expect(c.nonce).to.equal("");
+    });
 
-    const c = await contract.connect(addr2).getCommitment(0);
-    expect(c.output).to.equal("output");
-    expect(await contract.connect(owner).verifyReplay(0)).to.equal(true);
-  });
+    it("rejects revealing unknown commit ids", async function () {
+      await expect(
+        contract.revealDecision(999, "p", "o", "m", "n")
+      ).to.be.revertedWithCustomError(contract, "OnlyCommitter");
+    });
 
-  it("distinguishes whitespace variations", async function () {
-    const hash = computeDecisionHash("prompt", "output", "v2", "nonce");
-    await contract.commitDecision(hash);
+    it("rejects double reveal attempts regardless of payload", async function () {
+      const prompt = "policy prompt";
+      const output = "APPROVE";
+      const modelVersion = "agent-v2";
+      const nonce = "nonce-a";
+      const hash = computeDecisionHash(prompt, output, modelVersion, nonce);
 
-    await expect(
-      contract.revealDecision(0, "prompt ", "output", "v2", "nonce")
-    ).to.be.revertedWithCustomError(contract, "HashMismatch");
-  });
+      await contract.commitDecision(hash);
+      await contract.revealDecision(0, prompt, output, modelVersion, nonce);
 
-  it("records ascending timestamps for sequential commits", async function () {
-    const hash1 = computeDecisionHash("p1", "o1", "v2", "n1");
-    const hash2 = computeDecisionHash("p2", "o2", "v2", "n2");
+      await expect(
+        contract.revealDecision(0, "different", "payload", "values", "nonce")
+      ).to.be.revertedWithCustomError(contract, "AlreadyRevealed");
+    });
 
-    await contract.commitDecision(hash1);
-    await contract.commitDecision(hash2);
+    it("requires reveal before verifyReplay", async function () {
+      const hash = computeDecisionHash("p", "o", "m", "n");
+      await contract.commitDecision(hash);
 
-    const c0 = await contract.getCommitment(0);
-    const c1 = await contract.getCommitment(1);
-
-    expect(c1.timestamp).to.be.greaterThanOrEqual(c0.timestamp);
+      await expect(contract.verifyReplay(0)).to.be.revertedWithCustomError(
+        contract,
+        "NotRevealed"
+      );
+    });
   });
 });

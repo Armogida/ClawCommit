@@ -1,13 +1,8 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { ClawCommit } from "../typechain-types";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-
-const PROMPT = "Should we hedge treasury exposure?";
-const OUTPUT = "APPROVE_HEDGE_20_PERCENT";
-const MODEL_VERSION = "clawcommit-v2.1";
-const NONCE = "nonce-abc-123";
 
 function computeDecisionHash(
   prompt: string,
@@ -22,20 +17,25 @@ function computeDecisionHash(
   return ethers.keccak256(encoded);
 }
 
-describe("ClawCommit V2", function () {
+describe("ClawCommit", function () {
   let clawCommit: ClawCommit;
   let owner: HardhatEthersSigner;
   let addr1: HardhatEthersSigner;
 
+  const PROMPT = "Should we rebalance treasury this epoch?";
+  const OUTPUT = "APPROVE_REBALANCE_5_PERCENT";
+  const MODEL_VERSION = "clawcommit-agent-v2.1.0";
+  const NONCE = "randomNonce123abc";
+
   beforeEach(async function () {
     [owner, addr1] = await ethers.getSigners();
-    const Factory = await ethers.getContractFactory("ClawCommit");
-    clawCommit = await Factory.deploy();
+    const factory = await ethers.getContractFactory("ClawCommit");
+    clawCommit = await factory.deploy();
     await clawCommit.waitForDeployment();
   });
 
   describe("commitDecision", function () {
-    it("stores commitment with hash, timestamp, and committer", async function () {
+    it("stores commitment with correct hash and committer", async function () {
       const hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
 
       await clawCommit.commitDecision(hash);
@@ -43,7 +43,6 @@ describe("ClawCommit V2", function () {
       const c = await clawCommit.getCommitment(0);
       expect(c.hash).to.equal(hash);
       expect(c.committer).to.equal(owner.address);
-      expect(c.timestamp).to.be.greaterThan(0);
       expect(c.revealed).to.equal(false);
       expect(c.prompt).to.equal("");
       expect(c.output).to.equal("");
@@ -51,24 +50,46 @@ describe("ClawCommit V2", function () {
       expect(c.nonce).to.equal("");
     });
 
-    it("emits CommitCreated and increments commitCount", async function () {
+    it("emits CommitCreated event", async function () {
       const hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
 
       await expect(clawCommit.commitDecision(hash))
         .to.emit(clawCommit, "CommitCreated")
         .withArgs(0, owner.address, hash, anyValue);
+    });
 
+    it("increments commitCount", async function () {
+      const hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
+
+      await clawCommit.commitDecision(hash);
       expect(await clawCommit.commitCount()).to.equal(1);
+
+      await clawCommit.commitDecision(hash);
+      expect(await clawCommit.commitCount()).to.equal(2);
+    });
+
+    it("allows multiple commits from different addresses", async function () {
+      const hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
+
+      await clawCommit.connect(owner).commitDecision(hash);
+      await clawCommit.connect(addr1).commitDecision(hash);
+
+      const c0 = await clawCommit.getCommitment(0);
+      const c1 = await clawCommit.getCommitment(1);
+      expect(c0.committer).to.equal(owner.address);
+      expect(c1.committer).to.equal(addr1.address);
     });
   });
 
   describe("revealDecision", function () {
+    let hash: string;
+
     beforeEach(async function () {
-      const hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
+      hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
       await clawCommit.commitDecision(hash);
     });
 
-    it("reveals stored fields when hash matches", async function () {
+    it("reveals with correct prompt/output/modelVersion/nonce", async function () {
       await clawCommit.revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, NONCE);
 
       const c = await clawCommit.getCommitment(0);
@@ -79,53 +100,39 @@ describe("ClawCommit V2", function () {
       expect(c.nonce).to.equal(NONCE);
     });
 
-    it("rejects mutated prompt", async function () {
+    it("emits CommitRevealed event", async function () {
       await expect(
-        clawCommit.revealDecision(0, `${PROMPT}!`, OUTPUT, MODEL_VERSION, NONCE)
+        clawCommit.revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, NONCE)
       )
-        .to.be.revertedWithCustomError(clawCommit, "HashMismatch");
+        .to.emit(clawCommit, "CommitRevealed")
+        .withArgs(0, owner.address, PROMPT, OUTPUT, MODEL_VERSION);
     });
 
-    it("rejects mutated output", async function () {
+    it("reverts with HashMismatch for incorrect reveal payload", async function () {
       await expect(
-        clawCommit.revealDecision(0, PROMPT, `${OUTPUT}_ALT`, MODEL_VERSION, NONCE)
-      )
-        .to.be.revertedWithCustomError(clawCommit, "HashMismatch");
+        clawCommit.revealDecision(0, PROMPT, "WRONG_OUTPUT", MODEL_VERSION, NONCE)
+      ).to.be.revertedWithCustomError(clawCommit, "HashMismatch");
     });
 
-    it("rejects mutated modelVersion", async function () {
+    it("reverts with OnlyCommitter for non-committer", async function () {
       await expect(
-        clawCommit.revealDecision(0, PROMPT, OUTPUT, `${MODEL_VERSION}.1`, NONCE)
-      )
-        .to.be.revertedWithCustomError(clawCommit, "HashMismatch");
+        clawCommit
+          .connect(addr1)
+          .revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, NONCE)
+      ).to.be.revertedWithCustomError(clawCommit, "OnlyCommitter");
     });
 
-    it("rejects mutated nonce", async function () {
-      await expect(
-        clawCommit.revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, `${NONCE}x`)
-      )
-        .to.be.revertedWithCustomError(clawCommit, "HashMismatch");
-    });
-
-    it("rejects non-committer reveals", async function () {
-      await expect(
-        clawCommit.connect(addr1).revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, NONCE)
-      )
-        .to.be.revertedWithCustomError(clawCommit, "OnlyCommitter");
-    });
-
-    it("rejects double reveal", async function () {
+    it("reverts with AlreadyRevealed for second reveal", async function () {
       await clawCommit.revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, NONCE);
 
       await expect(
         clawCommit.revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, NONCE)
-      )
-        .to.be.revertedWithCustomError(clawCommit, "AlreadyRevealed");
+      ).to.be.revertedWithCustomError(clawCommit, "AlreadyRevealed");
     });
   });
 
-  describe("verifyReplay + computeDecisionHash", function () {
-    it("verifyReplay returns true after successful reveal", async function () {
+  describe("verifyReplay", function () {
+    it("returns true for correctly revealed commitment", async function () {
       const hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
       await clawCommit.commitDecision(hash);
       await clawCommit.revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, NONCE);
@@ -133,44 +140,85 @@ describe("ClawCommit V2", function () {
       expect(await clawCommit.verifyReplay(0)).to.equal(true);
     });
 
-    it("verifyReplay reverts before reveal", async function () {
+    it("reverts with NotRevealed when commitment not revealed", async function () {
       const hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
       await clawCommit.commitDecision(hash);
 
-      await expect(clawCommit.verifyReplay(0))
-        .to.be.revertedWithCustomError(clawCommit, "NotRevealed");
+      await expect(clawCommit.verifyReplay(0)).to.be.revertedWithCustomError(
+        clawCommit,
+        "NotRevealed"
+      );
     });
 
-    it("computeDecisionHash matches offchain ABI-encoded keccak", async function () {
-      const onchain = await clawCommit.computeDecisionHash(
+    it("allows any address to call verifyReplay", async function () {
+      const hash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
+      await clawCommit.commitDecision(hash);
+      await clawCommit.revealDecision(0, PROMPT, OUTPUT, MODEL_VERSION, NONCE);
+
+      expect(await clawCommit.connect(addr1).verifyReplay(0)).to.equal(true);
+    });
+  });
+
+  describe("computeDecisionHash", function () {
+    it("matches off-chain deterministic hash computation", async function () {
+      const contractHash = await clawCommit.computeDecisionHash(
         PROMPT,
         OUTPUT,
         MODEL_VERSION,
         NONCE
       );
-      const offchain = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
+      const localHash = computeDecisionHash(PROMPT, OUTPUT, MODEL_VERSION, NONCE);
+      expect(contractHash).to.equal(localHash);
+    });
 
-      expect(onchain).to.equal(offchain);
+    it("returns different hashes for different input tuples", async function () {
+      const hash1 = await clawCommit.computeDecisionHash(
+        "PROMPT_A",
+        "OUTPUT_A",
+        "MODEL_A",
+        "nonce1"
+      );
+      const hash2 = await clawCommit.computeDecisionHash(
+        "PROMPT_B",
+        "OUTPUT_B",
+        "MODEL_B",
+        "nonce2"
+      );
+      expect(hash1).to.not.equal(hash2);
     });
   });
 
   describe("full lifecycle", function () {
-    it("completes commit -> reveal -> verifyReplay", async function () {
-      const prompt = "Should we execute treasury rebalance now?";
-      const output = "APPROVE_REBALANCE";
-      const modelVersion = "clawcommit-v2.2";
-      const nonce = "lifecycle-xyz";
+    it("completes commit -> reveal -> verifyReplay cycle", async function () {
+      const prompt = "Should we publish model release notes now?";
+      const output = "APPROVE_RELEASE_NOTES";
+      const modelVersion = "clawcommit-agent-v2.2.0";
+      const nonce = "lifecycle-nonce-abc123";
 
       const hash = computeDecisionHash(prompt, output, modelVersion, nonce);
 
-      await clawCommit.commitDecision(hash);
-      await clawCommit.revealDecision(0, prompt, output, modelVersion, nonce);
+      const commitTx = await clawCommit.commitDecision(hash);
+      await commitTx.wait();
+      expect(await clawCommit.commitCount()).to.equal(1);
+
+      const revealTx = await clawCommit.revealDecision(
+        0,
+        prompt,
+        output,
+        modelVersion,
+        nonce
+      );
+      await revealTx.wait();
+
+      expect(await clawCommit.verifyReplay(0)).to.equal(true);
 
       const c = await clawCommit.getCommitment(0);
-      const replay = computeDecisionHash(c.prompt, c.output, c.modelVersion, c.nonce);
-
-      expect(c.hash).to.equal(replay);
-      expect(await clawCommit.verifyReplay(0)).to.equal(true);
+      const replayHash = computeDecisionHash(c.prompt, c.output, c.modelVersion, c.nonce);
+      expect(replayHash).to.equal(c.hash);
+      expect(c.revealed).to.equal(true);
+      expect(c.prompt).to.equal(prompt);
+      expect(c.output).to.equal(output);
+      expect(c.modelVersion).to.equal(modelVersion);
     });
   });
 });

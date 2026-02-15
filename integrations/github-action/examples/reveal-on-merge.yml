@@ -36,11 +36,15 @@ jobs:
         run: |
           COMMIT_ID=$(grep COMMIT_ID pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
           NONCE=$(grep NONCE pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
-          DECISION=$(grep DECISION pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
+          PROMPT=$(grep PROMPT pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
+          OUTPUT=$(grep OUTPUT pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
+          MODEL_VERSION=$(grep MODEL_VERSION pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
 
           echo "commit_id=$COMMIT_ID" >> $GITHUB_OUTPUT
           echo "nonce=$NONCE" >> $GITHUB_OUTPUT
-          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+          echo "prompt=$PROMPT" >> $GITHUB_OUTPUT
+          echo "output=$OUTPUT" >> $GITHUB_OUTPUT
+          echo "model_version=$MODEL_VERSION" >> $GITHUB_OUTPUT
 
       - name: Reveal AI Decision
         if: steps.check.outputs.exists == 'true'
@@ -49,7 +53,9 @@ jobs:
         with:
           action: reveal
           commit-id: ${{ steps.read.outputs.commit_id }}
-          decision: ${{ steps.read.outputs.decision }}
+          prompt: ${{ steps.read.outputs.prompt }}
+          output: ${{ steps.read.outputs.output }}
+          model-version: ${{ steps.read.outputs.model_version }}
           nonce: ${{ steps.read.outputs.nonce }}
           contract-address: ${{ secrets.CLAWCOMMIT_CONTRACT }}
           private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
@@ -65,7 +71,9 @@ jobs:
 
             ### Blockchain Details
             - **Commit ID**: ${{ steps.read.outputs.commit_id }}
-            - **Decision**: \`${{ steps.read.outputs.decision }}\`
+            - **Prompt**: \`${{ steps.read.outputs.prompt }}\`
+            - **Output**: \`${{ steps.read.outputs.output }}\`
+            - **Model Version**: \`${{ steps.read.outputs.model_version }}\`
             - **Reveal Transaction**: [View on BSCScan](https://bscscan.com/tx/${{ steps.reveal.outputs.tx-hash }})
 
             The decision is now publicly verifiable on BNB Chain.

@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Test script for ClawCommit MCP Server tools
- *
- * This script demonstrates how the MCP tools work without requiring
- * a full MCP client setup. Useful for debugging and validation.
+ * Test script for ClawCommit MCP Server tools.
  */
 
 import { ethers } from "ethers";
@@ -13,7 +10,6 @@ import { randomBytes } from "crypto";
 
 dotenv.config();
 
-// Network configuration
 const NETWORKS = {
   bscMainnet: {
     url: process.env.BSC_RPC_URL || "https://bsc-dataseed.binance.org/",
@@ -27,32 +23,35 @@ const NETWORKS = {
   }
 };
 
-/**
- * Test 1: Compute Hash (Off-chain)
- */
+function computeDecisionHash(prompt, output, modelVersion, nonce) {
+  const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["string", "string", "string", "string"],
+    [prompt, output, modelVersion, nonce]
+  );
+  return ethers.keccak256(encoded);
+}
+
 async function testComputeHash() {
   console.log("\n=== Test 1: Compute Hash ===");
 
-  const decision = "Deploy AI model v2.1.0 to production";
+  const prompt = "Should we deploy AI model v2.1.0 to production?";
+  const output = "APPROVE_DEPLOY";
+  const modelVersion = "clawcommit-agent-v2.1.0";
   const nonce = ethers.hexlify(randomBytes(32));
 
-  const hash = ethers.solidityPackedKeccak256(
-    ["string", "string"],
-    [decision, nonce]
-  );
+  const hash = computeDecisionHash(prompt, output, modelVersion, nonce);
 
-  console.log("Decision:", decision);
+  console.log("Prompt:", prompt);
+  console.log("Output:", output);
+  console.log("Model Version:", modelVersion);
   console.log("Nonce:", nonce);
   console.log("Hash:", hash);
-  console.log("Algorithm: keccak256(abi.encodePacked(decision, nonce))");
-  console.log("✓ Hash computed successfully (off-chain, no gas)");
+  console.log("Algorithm: keccak256(abi.encode(prompt, output, modelVersion, nonce))");
+  console.log("Hash computed successfully");
 
-  return { decision, nonce, hash };
+  return { prompt, output, modelVersion, nonce, hash };
 }
 
-/**
- * Test 2: Verify Connection to BNB Chain
- */
 async function testConnection(network = "bscTestnet") {
   console.log(`\n=== Test 2: Verify ${network} Connection ===`);
 
@@ -67,26 +66,22 @@ async function testConnection(network = "bscTestnet") {
     console.log("RPC URL:", networkConfig.url);
     console.log("Chain ID:", chainId);
     console.log("Current Block:", blockNumber);
-    console.log("✓ Connection successful");
+    console.log("Connection successful");
 
     return true;
   } catch (error) {
-    console.error("✗ Connection failed:", error.message);
+    console.error("Connection failed:", error.message);
     return false;
   }
 }
 
-/**
- * Test 3: Check Wallet Configuration
- */
 async function testWallet(network = "bscTestnet") {
   console.log("\n=== Test 3: Check Wallet Configuration ===");
 
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
 
   if (!privateKey) {
-    console.error("✗ DEPLOYER_PRIVATE_KEY not found in environment");
-    console.log("  Add it to .env file for commit/reveal operations");
+    console.error("DEPLOYER_PRIVATE_KEY not found in environment");
     return null;
   }
 
@@ -103,34 +98,29 @@ async function testWallet(network = "bscTestnet") {
     console.log("Balance:", balanceBNB, "BNB");
 
     if (parseFloat(balanceBNB) < 0.001) {
-      console.warn("⚠ Warning: Low balance. You may need more BNB for transactions.");
+      console.warn("Warning: Low balance. You may need more BNB for transactions.");
     } else {
-      console.log("✓ Wallet configured and funded");
+      console.log("Wallet configured and funded");
     }
 
     return wallet;
   } catch (error) {
-    console.error("✗ Wallet configuration error:", error.message);
+    console.error("Wallet configuration error:", error.message);
     return null;
   }
 }
 
-/**
- * Test 4: Verify Contract (if address provided)
- */
 async function testContract(contractAddress, network = "bscTestnet") {
   console.log("\n=== Test 4: Verify Contract ===");
 
   if (!contractAddress) {
-    console.log("ℹ No contract address provided. Skipping contract verification.");
-    console.log("  Deploy ClawCommit contract first, then test with:");
-    console.log(`  node test-tools.js <contract_address> [network]`);
+    console.log("No contract address provided. Skipping contract verification.");
     return null;
   }
 
   const ABI = [
     "function commitCount() external view returns (uint256)",
-    "function getCommitment(uint256 _commitId) external view returns (tuple(bytes32 hash, uint256 timestamp, address committer, bool revealed, string decision, string nonce))"
+    "function getCommitment(uint256 _commitId) external view returns (tuple(bytes32 hash, uint256 timestamp, address committer, bool revealed, string prompt, string output, string modelVersion, string nonce))"
   ];
 
   try {
@@ -144,24 +134,19 @@ async function testContract(contractAddress, network = "bscTestnet") {
     console.log("Network:", network);
     console.log("Total Commits:", commitCount.toString());
     console.log("Explorer:", `${networkConfig.explorer}/address/${contractAddress}`);
-    console.log("✓ Contract verified and accessible");
+    console.log("Contract verified and accessible");
 
     return contract;
   } catch (error) {
-    console.error("✗ Contract verification failed:", error.message);
-    console.log("  Ensure the contract is deployed at this address on", network);
+    console.error("Contract verification failed:", error.message);
     return null;
   }
 }
 
-/**
- * Main test runner
- */
 async function main() {
   console.log("ClawCommit MCP Server - Tool Verification");
   console.log("=========================================");
 
-  // Parse command line arguments
   const contractAddress = process.argv[2];
   const network = process.argv[3] || "bscTestnet";
 
@@ -170,36 +155,23 @@ async function main() {
     process.exit(1);
   }
 
-  // Run tests
   const hashResult = await testComputeHash();
   const connectionOk = await testConnection(network);
   const wallet = await testWallet(network);
   const contract = await testContract(contractAddress, network);
 
-  // Summary
   console.log("\n=== Summary ===");
-  console.log("✓ Hash computation: Working");
-  console.log(connectionOk ? "✓ Network connection: Working" : "✗ Network connection: Failed");
-  console.log(wallet ? "✓ Wallet: Configured" : "✗ Wallet: Not configured");
-  console.log(contract ? "✓ Contract: Verified" : "- Contract: Not tested");
-
-  console.log("\nℹ Next Steps:");
-  if (!wallet) {
-    console.log("  1. Add DEPLOYER_PRIVATE_KEY to .env file");
-  }
-  if (!contract) {
-    console.log("  2. Deploy ClawCommit contract to", network);
-    console.log("  3. Run: node test-tools.js <contract_address>", network);
-  } else {
-    console.log("  Ready to use MCP server with Claude Code!");
-    console.log("  Add the server to .claude/settings.json (see README.md)");
-  }
+  console.log("Hash computation: Working");
+  console.log(connectionOk ? "Network connection: Working" : "Network connection: Failed");
+  console.log(wallet ? "Wallet: Configured" : "Wallet: Not configured");
+  console.log(contract ? "Contract: Verified" : "Contract: Not tested");
 
   console.log("\n=== Example Hash for Testing ===");
-  console.log("Decision:", hashResult.decision);
+  console.log("Prompt:", hashResult.prompt);
+  console.log("Output:", hashResult.output);
+  console.log("Model Version:", hashResult.modelVersion);
   console.log("Nonce:", hashResult.nonce);
   console.log("Hash:", hashResult.hash);
-  console.log("\nYou can use these values to test commit operations.");
 }
 
 main().catch(error => {

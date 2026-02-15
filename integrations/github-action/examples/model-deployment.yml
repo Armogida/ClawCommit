@@ -62,18 +62,24 @@ jobs:
           fi
           echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
 
-      - name: Create Deployment Decision
-        id: decision
+      - name: Create Deployment Payload
+        id: payload
         run: |
-          DECISION="MODEL_DEPLOYMENT_v${{ steps.info.outputs.version }}_ENV_${{ steps.info.outputs.environment }}_SHA_${{ steps.info.outputs.sha }}_CHECKSUM_${{ steps.checksum.outputs.checksum }}_TIME_${{ steps.info.outputs.timestamp }}"
-          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+          PROMPT="Should we deploy model version ${{ steps.info.outputs.version }} to ${{ steps.info.outputs.environment }}?"
+          OUTPUT="MODEL_DEPLOYMENT_v${{ steps.info.outputs.version }}_ENV_${{ steps.info.outputs.environment }}_SHA_${{ steps.info.outputs.sha }}_CHECKSUM_${{ steps.checksum.outputs.checksum }}_TIME_${{ steps.info.outputs.timestamp }}"
+          MODEL_VERSION="deployment-auditor-v2"
+          echo "prompt=$PROMPT" >> $GITHUB_OUTPUT
+          echo "output=$OUTPUT" >> $GITHUB_OUTPUT
+          echo "model_version=$MODEL_VERSION" >> $GITHUB_OUTPUT
 
       - name: Commit Deployment to Blockchain
         id: commit
         uses: Armogida/ClawCommit/integrations/github-action@main
         with:
           action: commit
-          decision: ${{ steps.decision.outputs.decision }}
+          prompt: ${{ steps.payload.outputs.prompt }}
+          output: ${{ steps.payload.outputs.output }}
+          model-version: ${{ steps.payload.outputs.model_version }}
           contract-address: ${{ secrets.CLAWCOMMIT_CONTRACT }}
           private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
 
@@ -119,9 +125,11 @@ jobs:
           - **Nonce**: \`${{ steps.commit.outputs.nonce }}\`
           - **Transaction**: [View on BSCScan](https://bscscan.com/tx/${{ steps.commit.outputs.tx-hash }})
 
-          ### Decision String
+          ### Decision Payload
           \`\`\`
-          ${{ steps.decision.outputs.decision }}
+          Prompt: ${{ steps.payload.outputs.prompt }}
+          Output: ${{ steps.payload.outputs.output }}
+          Model Version: ${{ steps.payload.outputs.model_version }}
           \`\`\`
 
           This deployment has been cryptographically committed to BNB Chain for compliance and audit purposes.

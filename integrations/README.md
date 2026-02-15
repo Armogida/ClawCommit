@@ -77,13 +77,18 @@ import { ClawCommit } from '@clawcommit/sdk';
 
 const client = new ClawCommit({
   contractAddress: '0x...',
-  network: 'bscMainnet',
+  rpcUrl: 'https://bsc-dataseed.binance.org/',
   privateKey: process.env.PRIVATE_KEY
 });
 
-const { commitId, hash } = await client.commit('Deploy model v2.0');
+const payload = {
+  prompt: 'Should we deploy model v2.0?',
+  output: 'APPROVE_DEPLOY',
+  modelVersion: 'deploy-agent-v2.0'
+};
+const { commitId, nonce } = await client.commit(payload);
 // ... later ...
-await client.reveal(commitId, 'Deploy model v2.0', hash.nonce);
+await client.reveal(Number(commitId), payload, nonce);
 ```
 
 **Documentation**: [sdk/README.md](./sdk/README.md)
@@ -109,7 +114,9 @@ await client.reveal(commitId, 'Deploy model v2.0', hash.nonce);
     "name": "commit_decision",
     "description": "Commit a decision to blockchain",
     "parameters": {
-      "decision": { "type": "string" },
+      "prompt": { "type": "string" },
+      "output": { "type": "string" },
+      "model_version": { "type": "string" },
       "network": { "type": "string", "enum": ["mainnet", "testnet"] }
     }
   }]
@@ -267,12 +274,17 @@ Get free testnet BNB: https://testnet.bnbchain.org/faucet-smart
 
 ```javascript
 // Commit before deployment
-const { commitId } = await client.commit('Deploy GPT-4 fine-tune v2.1');
+const payload = {
+  prompt: 'Should we deploy GPT-4 fine-tune v2.1?',
+  output: 'APPROVE_DEPLOY',
+  modelVersion: 'release-agent-v2.1'
+};
+const { commitId, nonce } = await client.commit(payload);
 
 // Deploy model...
 
 // Reveal after successful deployment
-await client.reveal(commitId, 'Deploy GPT-4 fine-tune v2.1', nonce);
+await client.reveal(Number(commitId), payload, nonce);
 ```
 
 ### 2. Governance Voting
@@ -282,7 +294,9 @@ await client.reveal(commitId, 'Deploy GPT-4 fine-tune v2.1', nonce);
 - uses: ./integrations/github-action
   with:
     action: commit
-    decision: "Vote YES on proposal #42"
+    prompt: "Should we vote on proposal #42?"
+    output: "VOTE_YES"
+    model-version: "governance-agent-v1"
 
 # Reveal after voting period
 - uses: ./integrations/github-action
@@ -296,8 +310,13 @@ await client.reveal(commitId, 'Deploy GPT-4 fine-tune v2.1', nonce);
 ```typescript
 // Create tamper-evident log
 for (const decision of aiDecisions) {
-  const { commitId } = await client.commit(decision);
-  await client.reveal(commitId, decision, nonce);
+  const payload = {
+    prompt: decision.prompt,
+    output: decision.output,
+    modelVersion: decision.modelVersion
+  };
+  const { commitId, nonce } = await client.commit(payload);
+  await client.reveal(Number(commitId), payload, nonce);
 }
 
 // Later: verify all decisions
@@ -333,7 +352,7 @@ View on BSCScan: https://testnet.bscscan.com/tx/0x...
 - Check you're on correct network (testnet vs mainnet)
 
 ### "Hash mismatch"
-- Decision and nonce must match exactly
+- Prompt, output, model version, and nonce must match exactly
 - Strings are case and whitespace sensitive
 - Store nonces securely after committing
 

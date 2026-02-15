@@ -35,18 +35,24 @@ jobs:
           echo "confidence=$CONFIDENCE" >> $GITHUB_OUTPUT
           echo "issues=$ISSUES_FOUND" >> $GITHUB_OUTPUT
 
-      - name: Create Decision String
-        id: decision
+      - name: Create Decision Payload
+        id: payload
         run: |
-          DECISION="AI_REVIEW_${{ steps.ai-review.outputs.result }}_PR_${{ github.event.pull_request.number }}_SHA_${{ github.event.pull_request.head.sha }}_CONFIDENCE_${{ steps.ai-review.outputs.confidence }}_ISSUES_${{ steps.ai-review.outputs.issues }}"
-          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+          PROMPT="Should this PR be approved by the AI reviewer?"
+          OUTPUT="AI_REVIEW_${{ steps.ai-review.outputs.result }}_PR_${{ github.event.pull_request.number }}_SHA_${{ github.event.pull_request.head.sha }}_CONFIDENCE_${{ steps.ai-review.outputs.confidence }}_ISSUES_${{ steps.ai-review.outputs.issues }}"
+          MODEL_VERSION="ai-review-agent-v2"
+          echo "prompt=$PROMPT" >> $GITHUB_OUTPUT
+          echo "output=$OUTPUT" >> $GITHUB_OUTPUT
+          echo "model_version=$MODEL_VERSION" >> $GITHUB_OUTPUT
 
       - name: Commit to Blockchain
         id: commit
         uses: Armogida/ClawCommit/integrations/github-action@main
         with:
           action: commit
-          decision: ${{ steps.decision.outputs.decision }}
+          prompt: ${{ steps.payload.outputs.prompt }}
+          output: ${{ steps.payload.outputs.output }}
+          model-version: ${{ steps.payload.outputs.model_version }}
           contract-address: ${{ secrets.CLAWCOMMIT_CONTRACT }}
           private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
           rpc-url: ${{ secrets.BSC_RPC_URL }}
@@ -84,7 +90,9 @@ jobs:
           mkdir -p .clawcommit
           echo "COMMIT_ID=${{ steps.commit.outputs.commit-id }}" > .clawcommit/pr-${{ github.event.pull_request.number }}.txt
           echo "NONCE=${{ steps.commit.outputs.nonce }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
-          echo "DECISION=${{ steps.decision.outputs.decision }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
+          echo "PROMPT=${{ steps.payload.outputs.prompt }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
+          echo "OUTPUT=${{ steps.payload.outputs.output }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
+          echo "MODEL_VERSION=${{ steps.payload.outputs.model_version }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
           echo "HASH=${{ steps.commit.outputs.hash }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
 
       - name: Upload Commit Data as Artifact

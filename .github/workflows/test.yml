@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  contract-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -35,3 +35,63 @@ jobs:
 
       - name: Run coverage
         run: npx hardhat coverage
+
+  integration-sdk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: integrations/sdk/package-lock.json
+
+      - name: Install SDK dependencies
+        run: npm ci --prefix integrations/sdk
+
+      - name: SDK typecheck
+        run: npm run typecheck --prefix integrations/sdk
+
+      - name: SDK build
+        run: npm run build --prefix integrations/sdk
+
+  integration-github-action:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install GitHub Action dependencies
+        run: npm install --prefix integrations/github-action
+
+      - name: Validate GitHub Action scripts
+        run: |
+          node --check integrations/github-action/index.js
+          node --check integrations/github-action/test-local.js
+
+  integration-mcp-server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install MCP dependencies
+        run: npm install --prefix integrations/mcp-server
+
+      - name: Validate MCP scripts
+        run: |
+          node --check integrations/mcp-server/index.js
+          node --check integrations/mcp-server/test-tools.js
