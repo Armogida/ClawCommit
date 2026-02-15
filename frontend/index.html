@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClawCommit - Deterministic AI Decision Protocol</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e27; color: #e0e0e0; line-height: 1.6; padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { color: #00d4ff; margin-bottom: 10px; font-size: 28px; }
+        .subtitle { color: #888; margin-bottom: 30px; font-size: 14px; }
+        .section { background: #1a1f3a; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #2a3f5f; }
+        .section h2 { color: #00d4ff; margin-bottom: 15px; font-size: 18px; }
+        input, button {
+            width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px;
+            border: 1px solid #2a3f5f; background: #0f1429; color: #e0e0e0; font-size: 14px;
+        }
+        input:focus { outline: none; border-color: #00d4ff; }
+        button {
+            background: linear-gradient(135deg, #00d4ff, #0099cc); color: #0a0e27;
+            font-weight: 600; cursor: pointer; border: none; transition: all 0.3s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .output {
+            background: #0f1429; padding: 12px; border-radius: 6px;
+            font-family: monospace; font-size: 12px; word-break: break-all; margin: 8px 0;
+            border: 1px solid #2a3f5f;
+        }
+        .status {
+            max-height: 200px; overflow-y: auto; background: #0f1429;
+            padding: 15px; border-radius: 6px; font-size: 13px; border: 1px solid #2a3f5f;
+        }
+        .status-item { margin: 5px 0; padding: 8px; border-left: 3px solid #00d4ff; background: #1a1f3a; }
+        .error { border-left-color: #ff4444; }
+        .success { border-left-color: #00ff88; }
+        .label { color: #888; font-size: 13px; margin-top: 10px; display: block; }
+        .connected { color: #00ff88; font-weight: 600; }
+        .disconnected { color: #ff4444; }
+        .info-box { background: #0f1429; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ClawCommit</h1>
+        <div class="subtitle">Deterministic AI Decision Commit-Reveal Protocol on BNB Chain</div>
+
+        <div class="section">
+            <h2>Connection</h2>
+            <input type="text" id="contractAddress" placeholder="Contract Address (0x...)" />
+            <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+            <div class="output">
+                <div>Status: <span id="walletStatus" class="disconnected">Not Connected</span></div>
+                <div id="accountDisplay"></div>
+                <div id="networkDisplay"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Commit Decision</h2>
+            <input type="text" id="commitDecision" placeholder="Enter your AI decision" />
+            <button onclick="generateNonce()">Generate New Nonce</button>
+            <div class="output">Nonce: <span id="nonceDisplay">-</span></div>
+            <div class="output">Hash: <span id="hashDisplay">-</span></div>
+            <button onclick="commitDecision()">Submit Commitment</button>
+        </div>
+
+        <div class="section">
+            <h2>Reveal Decision</h2>
+            <div class="grid">
+                <input type="number" id="revealCommitId" placeholder="Commit ID" />
+                <input type="text" id="revealDecision" placeholder="Decision" />
+            </div>
+            <input type="text" id="revealNonce" placeholder="Nonce" />
+            <button onclick="revealDecision()">Reveal Decision</button>
+        </div>
+
+        <div class="section">
+            <h2>Verify & Replay</h2>
+            <input type="number" id="verifyCommitId" placeholder="Commit ID to verify" />
+            <button onclick="verifyCommitment()">Verify Commitment</button>
+            <div id="verifyOutput" class="info-box" style="display:none;">
+                <div><strong>Commitment Data:</strong></div>
+                <div id="commitmentData"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Activity Log</h2>
+            <div class="status" id="statusLog">Waiting for actions...</div>
+        </div>
+    </div>
+
+    <script>
+        const ABI = [
+            "function commit(bytes32 _hash) external returns (uint256)",
+            "function reveal(uint256 _commitId, string calldata _decision, string calldata _nonce) external",
+            "function getCommitment(uint256 _commitId) external view returns (bytes32 hash, uint256 timestamp, address committer, bool revealed, string memory decision, string memory nonce)",
+            "function verify(uint256 _commitId) external view returns (bool)",
+            "function computeHash(string calldata _decision, string calldata _nonce) external pure returns (bytes32)"
+        ];
+
+        let provider, signer, contract, currentNonce = '';
+
+        async function connectWallet() {
+            const contractAddr = document.getElementById('contractAddress').value.trim();
+            if (!contractAddr) return logStatus('Please enter contract address', true);
+
+            if (!window.ethereum) return logStatus('MetaMask not found', true);
+
+            try {
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+                const network = await provider.getNetwork();
+                const address = await signer.getAddress();
+
+                if (network.chainId !== 56n && network.chainId !== 97n) {
+                    logStatus('Please switch to BSC Mainnet (56) or Testnet (97)', true);
+                    await switchToBSC();
+                    return;
+                }
+
+                contract = new ethers.Contract(contractAddr, ABI, signer);
+
+                document.getElementById('walletStatus').textContent = 'Connected';
+                document.getElementById('walletStatus').className = 'connected';
+                document.getElementById('accountDisplay').textContent = `Account: ${address}`;
+                document.getElementById('networkDisplay').textContent = `Network: BSC ${network.chainId === 56n ? 'Mainnet' : 'Testnet'}`;
+
+                logStatus(`Connected to ${address.slice(0, 6)}...${address.slice(-4)} on BSC`);
+            } catch (error) {
+                logStatus(`Connection error: ${error.message}`, true);
+            }
+        }
+
+        async function switchToBSC() {
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: '0x38' }], // BSC Mainnet
+                });
+            } catch (error) {
+                if (error.code === 4902) {
+                    await window.ethereum.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [{
+                            chainId: '0x38',
+                            chainName: 'BNB Smart Chain',
+                            nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                            rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                            blockExplorerUrls: ['https://bscscan.com/']
+                        }]
+                    });
+                }
+            }
+        }
+
+        function generateNonce() {
+            currentNonce = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+                .map(b => b.toString(16).padStart(2, '0')).join('');
+            document.getElementById('nonceDisplay').textContent = currentNonce;
+            updateHash();
+            logStatus('New nonce generated');
+        }
+
+        async function updateHash() {
+            const decision = document.getElementById('commitDecision').value;
+            if (!decision || !currentNonce || !contract) return;
+
+            try {
+                const hash = await contract.computeHash(decision, currentNonce);
+                document.getElementById('hashDisplay').textContent = hash;
+            } catch (error) {
+                logStatus(`Hash computation error: ${error.message}`, true);
+            }
+        }
+
+        async function commitDecision() {
+            if (!contract) return logStatus('Connect wallet first', true);
+            const decision = document.getElementById('commitDecision').value;
+            if (!decision || !currentNonce) return logStatus('Generate nonce and enter decision', true);
+
+            try {
+                logStatus('Computing hash...');
+                const hash = await contract.computeHash(decision, currentNonce);
+
+                logStatus('Submitting commitment...');
+                const tx = await contract.commit(hash);
+                logStatus(`Transaction sent: ${tx.hash.slice(0, 10)}...`);
+
+                const receipt = await tx.wait();
+                const commitId = receipt.logs[0]?.topics[1];
+                const id = commitId ? parseInt(commitId, 16) : 'check logs';
+
+                logStatus(`Commitment successful! Commit ID: ${id}`, false, true);
+                logStatus(`Save this: Decision="${decision}", Nonce="${currentNonce}", ID=${id}`, false, true);
+            } catch (error) {
+                logStatus(`Commit error: ${error.message}`, true);
+            }
+        }
+
+        async function revealDecision() {
+            if (!contract) return logStatus('Connect wallet first', true);
+            const commitId = document.getElementById('revealCommitId').value;
+            const decision = document.getElementById('revealDecision').value;
+            const nonce = document.getElementById('revealNonce').value;
+
+            if (!commitId || !decision || !nonce) return logStatus('Fill all reveal fields', true);
+
+            try {
+                logStatus('Submitting reveal...');
+                const tx = await contract.reveal(commitId, decision, nonce);
+                logStatus(`Transaction sent: ${tx.hash.slice(0, 10)}...`);
+
+                await tx.wait();
+                logStatus(`Reveal successful! Commit ID ${commitId} revealed`, false, true);
+            } catch (error) {
+                logStatus(`Reveal error: ${error.message}`, true);
+            }
+        }
+
+        async function verifyCommitment() {
+            if (!contract) return logStatus('Connect wallet first', true);
+            const commitId = document.getElementById('verifyCommitId').value;
+            if (!commitId) return logStatus('Enter commit ID', true);
+
+            try {
+                logStatus('Fetching commitment data...');
+                const [hash, timestamp, committer, revealed, decision, nonce] = await contract.getCommitment(commitId);
+                const isValid = await contract.verify(commitId);
+
+                const data = `
+                    <div>Hash: ${hash}</div>
+                    <div>Timestamp: ${new Date(Number(timestamp) * 1000).toLocaleString()}</div>
+                    <div>Committer: ${committer}</div>
+                    <div>Revealed: ${revealed ? 'Yes' : 'No'}</div>
+                    ${revealed ? `<div>Decision: ${decision}</div><div>Nonce: ${nonce}</div>` : ''}
+                    <div><strong>Verification: ${isValid ? 'VALID ✓' : 'INVALID ✗'}</strong></div>
+                `;
+
+                document.getElementById('commitmentData').innerHTML = data;
+                document.getElementById('verifyOutput').style.display = 'block';
+                logStatus(`Verification complete: ${isValid ? 'VALID' : 'INVALID'}`, !isValid, isValid);
+            } catch (error) {
+                logStatus(`Verify error: ${error.message}`, true);
+            }
+        }
+
+        function logStatus(message, isError = false, isSuccess = false) {
+            const log = document.getElementById('statusLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = isError ? 'error' : isSuccess ? 'success' : '';
+            log.innerHTML = `<div class="status-item ${className}">[${timestamp}] ${message}</div>` + log.innerHTML;
+        }
+
+        document.getElementById('commitDecision').addEventListener('input', updateHash);
+    </script>
+</body>
+</html>

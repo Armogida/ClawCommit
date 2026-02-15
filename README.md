@@ -86,7 +86,7 @@ npx hardhat test
 ### Deploy Locally
 
 ```bash
-npx hardhat run src/scripts/deploy.js
+npx hardhat run scripts/deploy.ts
 ```
 
 ### Deploy to BSC Mainnet
@@ -97,6 +97,14 @@ cp .env.example .env
 npm run deploy:mainnet
 ```
 
+### Deploy + Full Proof (Mainnet)
+
+```bash
+npx hardhat run scripts/deployAndProve.ts --network bscMainnet
+```
+
+This deploys, commits an example decision, reveals it, verifies, and writes proof artifacts to `deployment-proof/`.
+
 ---
 
 ## Usage: Commit, Reveal, Replay
@@ -104,7 +112,7 @@ npm run deploy:mainnet
 ### 1. Commit a Decision
 
 ```bash
-npx hardhat run src/scripts/commit.js --network bscMainnet \
+npx hardhat run scripts/commit.ts --network bscMainnet \
   -- --contract <CONTRACT_ADDRESS> \
   --decision "BUY_BNB_AT_580" \
   --nonce "a1b2c3d4e5f6"
@@ -115,7 +123,7 @@ The contract stores the keccak256 hash and block timestamp. The decision remains
 ### 2. Reveal the Decision
 
 ```bash
-npx hardhat run src/scripts/reveal.js --network bscMainnet \
+npx hardhat run scripts/reveal.ts --network bscMainnet \
   -- --contract <CONTRACT_ADDRESS> \
   --commit-id 0 \
   --decision "BUY_BNB_AT_580" \
@@ -127,12 +135,21 @@ The contract recomputes the hash and verifies it matches the original commitment
 ### 3. Replay Verification
 
 ```bash
-npx hardhat run src/scripts/verify.js --network bscMainnet \
+npx hardhat run scripts/replay.ts --network bscMainnet \
   -- --contract <CONTRACT_ADDRESS> \
   --commit-id 0
 ```
 
 Reads the commitment data and independently recomputes the hash to verify integrity.
+
+### 4. AI Pipeline Demo
+
+```bash
+npx hardhat run backend/aiPipeline.ts --network bscMainnet \
+  -- --contract <CONTRACT_ADDRESS>
+```
+
+Simulates a full AI decision lifecycle: generate decision, commit, reveal, and replay verify.
 
 ---
 
@@ -156,25 +173,33 @@ Reads the commitment data and independently recomputes the hash to verify integr
 
 ```
 ClawCommit/
-├── src/
-│   ├── contracts/
-│   │   └── ClawCommit.sol        — Solidity smart contract
-│   ├── scripts/
-│   │   ├── deploy.js             — Deployment script
-│   │   ├── commit.js             — Commit interaction script
-│   │   ├── reveal.js             — Reveal interaction script
-│   │   └── verify.js             — Replay verification script
-│   └── backend/                  — Off-chain utilities
+├── contracts/
+│   └── ClawCommit.sol              — Solidity smart contract
+├── scripts/
+│   ├── deploy.ts                   — Deployment script
+│   ├── commit.ts                   — Commit interaction script
+│   ├── reveal.ts                   — Reveal interaction script
+│   ├── replay.ts                   — Replay verification script
+│   ├── deployAndProve.ts           — Deploy + commit + reveal + proof
+│   └── verifyContract.ts           — BscScan contract verification
+├── backend/
+│   └── aiPipeline.ts               — AI decision pipeline demo
+├── frontend/
+│   └── index.html                  — Minimal UI (MetaMask + BSC)
 ├── test/
-│   └── ClawCommit.test.js        — Hardhat test suite
+│   ├── ClawCommit.test.ts          — Core contract test suite
+│   └── HashValidation.test.ts      — Deterministic hash validation tests
+├── deployment-proof/               — Mainnet deployment artifacts
 ├── docs/
-│   ├── PROJECT.md                — Project documentation
-│   └── TECHNICAL.md              — Technical specification
-├── hardhat.config.js             — Hardhat + BSC network config
-├── package.json                  — Dependencies and scripts
-├── bsc.address                   — Deployment record
-├── .env.example                  — Environment variable template
-└── LICENSE                       — MIT License
+│   ├── PROJECT.md                  — Project documentation
+│   ├── TECHNICAL.md                — Technical specification
+│   └── AI_BUILD_LOG.md             — AI-assisted build log
+├── hardhat.config.ts               — Hardhat + BSC network config
+├── tsconfig.json                   — TypeScript configuration
+├── package.json                    — Dependencies and scripts
+├── bsc.address                     — Deployment record
+├── .env.example                    — Environment variable template
+└── LICENSE                         — MIT License
 ```
 
 ---

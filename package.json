@@ -7,15 +7,24 @@
     "test": "hardhat test",
     "test:gas": "REPORT_GAS=true hardhat test",
     "coverage": "hardhat coverage",
-    "deploy:local": "hardhat run src/scripts/deploy.js",
-    "deploy:testnet": "hardhat run src/scripts/deploy.js --network bscTestnet",
-    "deploy:mainnet": "hardhat run src/scripts/deploy.js --network bscMainnet"
+    "deploy:local": "hardhat run scripts/deploy.ts",
+    "deploy:testnet": "hardhat run scripts/deploy.ts --network bscTestnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.ts --network bscMainnet",
+    "commit": "hardhat run scripts/commit.ts --network bscMainnet",
+    "reveal": "hardhat run scripts/reveal.ts --network bscMainnet",
+    "replay": "hardhat run scripts/replay.ts --network bscMainnet",
+    "pipeline": "hardhat run backend/aiPipeline.ts --network bscMainnet"
   },
   "keywords": ["bnb-chain", "bsc", "commit-reveal", "ai", "deterministic", "smart-contract"],
   "license": "MIT",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
     "dotenv": "^16.4.0",
-    "hardhat": "^2.22.0"
+    "hardhat": "^2.22.0",
+    "ts-node": "^10.9.0",
+    "typechain": "^8.3.0",
+    "typescript": "^5.4.0"
   }
 }

@@ -1,23 +1,25 @@
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
+import { expect } from "chai";
+import { ethers } from "hardhat";
+import { ClawCommit } from "../typechain-types";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("ClawCommit", function () {
-  let clawCommit;
-  let owner;
-  let addr1;
+  let clawCommit: ClawCommit;
+  let owner: HardhatEthersSigner;
+  let addr1: HardhatEthersSigner;
 
   const DECISION = "BUY_BNB_AT_580";
   const NONCE = "randomNonce123abc";
 
   beforeEach(async function () {
     [owner, addr1] = await ethers.getSigners();
-    const ClawCommit = await ethers.getContractFactory("ClawCommit");
-    clawCommit = await ClawCommit.deploy();
+    const Factory = await ethers.getContractFactory("ClawCommit");
+    clawCommit = await Factory.deploy();
     await clawCommit.waitForDeployment();
   });
 
   describe("commit", function () {
-    it("should create a commitment with correct hash", async function () {
+    it("should store commitment with correct hash and committer", async function () {
       const hash = ethers.solidityPackedKeccak256(
         ["string", "string"],
         [DECISION, NONCE]
@@ -25,10 +27,12 @@ describe("ClawCommit", function () {
 
       await clawCommit.commit(hash);
 
-      const commitment = await clawCommit.getCommitment(0);
-      expect(commitment.hash).to.equal(hash);
-      expect(commitment.committer).to.equal(owner.address);
-      expect(commitment.revealed).to.equal(false);
+      const c = await clawCommit.getCommitment(0);
+      expect(c.hash).to.equal(hash);
+      expect(c.committer).to.equal(owner.address);
+      expect(c.revealed).to.equal(false);
+      expect(c.decision).to.equal("");
+      expect(c.nonce).to.equal("");
     });
 
     it("should emit CommitCreated event", async function () {
@@ -53,10 +57,25 @@ describe("ClawCommit", function () {
       await clawCommit.commit(hash);
       expect(await clawCommit.commitCount()).to.equal(2);
     });
+
+    it("should allow multiple commits from different addresses", async function () {
+      const hash = ethers.solidityPackedKeccak256(
+        ["string", "string"],
+        [DECISION, NONCE]
+      );
+
+      await clawCommit.connect(owner).commit(hash);
+      await clawCommit.connect(addr1).commit(hash);
+
+      const c0 = await clawCommit.getCommitment(0);
+      const c1 = await clawCommit.getCommitment(1);
+      expect(c0.committer).to.equal(owner.address);
+      expect(c1.committer).to.equal(addr1.address);
+    });
   });
 
   describe("reveal", function () {
-    let hash;
+    let hash: string;
 
     beforeEach(async function () {
       hash = ethers.solidityPackedKeccak256(
@@ -69,10 +88,10 @@ describe("ClawCommit", function () {
     it("should reveal with correct decision and nonce", async function () {
       await clawCommit.reveal(0, DECISION, NONCE);
 
-      const commitment = await clawCommit.getCommitment(0);
-      expect(commitment.revealed).to.equal(true);
-      expect(commitment.decision).to.equal(DECISION);
-      expect(commitment.nonce).to.equal(NONCE);
+      const c = await clawCommit.getCommitment(0);
+      expect(c.revealed).to.equal(true);
+      expect(c.decision).to.equal(DECISION);
+      expect(c.nonce).to.equal(NONCE);
     });
 
     it("should emit CommitRevealed event", async function () {
@@ -133,7 +152,7 @@ describe("ClawCommit", function () {
   });
 
   describe("computeHash", function () {
-    it("should return deterministic hash", async function () {
+    it("should produce deterministic hash matching off-chain computation", async function () {
       const contractHash = await clawCommit.computeHash(DECISION, NONCE);
       const localHash = ethers.solidityPackedKeccak256(
         ["string", "string"],
@@ -158,13 +177,47 @@ describe("ClawCommit", function () {
       await clawCommit.commit(hash);
       await clawCommit.reveal(0, DECISION, NONCE);
 
-      const commitment = await clawCommit.getCommitment(0);
+      const c = await clawCommit.getCommitment(0);
       const replayHash = ethers.solidityPackedKeccak256(
         ["string", "string"],
-        [commitment.decision, commitment.nonce]
+        [c.decision, c.nonce]
       );
 
-      expect(replayHash).to.equal(commitment.hash);
+      expect(replayHash).to.equal(c.hash);
+    });
+  });
+
+  describe("full lifecycle", function () {
+    it("should complete commit → reveal → verify → replay cycle", async function () {
+      const decision = '{"prompt":"test","output":"APPROVE","model":"v1"}';
+      const nonce = "lifecycle-nonce-abc123";
+
+      const hash = ethers.solidityPackedKeccak256(
+        ["string", "string"],
+        [decision, nonce]
+      );
+
+      // Commit
+      const commitTx = await clawCommit.commit(hash);
+      await commitTx.wait();
+      expect(await clawCommit.commitCount()).to.equal(1);
+
+      // Reveal
+      const revealTx = await clawCommit.reveal(0, decision, nonce);
+      await revealTx.wait();
+
+      // Verify on-chain
+      expect(await clawCommit.verify(0)).to.equal(true);
+
+      // Replay off-chain
+      const c = await clawCommit.getCommitment(0);
+      const replay = ethers.solidityPackedKeccak256(
+        ["string", "string"],
+        [c.decision, c.nonce]
+      );
+      expect(replay).to.equal(c.hash);
+      expect(c.revealed).to.equal(true);
+      expect(c.decision).to.equal(decision);
     });
   });
 });

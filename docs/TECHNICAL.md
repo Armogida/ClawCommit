@@ -46,12 +46,16 @@
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Smart Contract | `src/contracts/ClawCommit.sol` | Onchain commit-reveal storage and verification |
-| Deploy Script | `src/scripts/deploy.js` | Contract deployment to BSC |
-| Commit Script | `src/scripts/commit.js` | CLI for committing decisions |
-| Reveal Script | `src/scripts/reveal.js` | CLI for revealing decisions |
-| Verify Script | `src/scripts/verify.js` | CLI for replay verification |
-| Test Suite | `test/ClawCommit.test.js` | Comprehensive contract tests |
+| Smart Contract | `contracts/ClawCommit.sol` | Onchain commit-reveal storage and verification |
+| Deploy Script | `scripts/deploy.ts` | Contract deployment to BSC |
+| Commit Script | `scripts/commit.ts` | CLI for committing decisions |
+| Reveal Script | `scripts/reveal.ts` | CLI for revealing decisions |
+| Replay Script | `scripts/replay.ts` | CLI for replay verification |
+| Deploy + Prove | `scripts/deployAndProve.ts` | Deploy, commit, reveal, and generate proof artifacts |
+| AI Pipeline | `backend/aiPipeline.ts` | Full AI decision lifecycle demo |
+| Frontend | `frontend/index.html` | Minimal UI for MetaMask/BSC interaction |
+| Test Suite | `test/ClawCommit.test.ts` | Core contract tests |
+| Hash Tests | `test/HashValidation.test.ts` | Deterministic hash validation tests |
 
 ---
 
@@ -190,12 +194,15 @@ This determinism is the core guarantee enabling replay verification. The hash fu
 
 ## 7. Hardhat Configuration for BSC Mainnet
 
-```javascript
-// hardhat.config.js
-require("@nomicfoundation/hardhat-toolbox");
-require("dotenv").config();
+```typescript
+// hardhat.config.ts
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
+import * as dotenv from "dotenv";
 
-module.exports = {
+dotenv.config();
+
+const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.24",
     settings: {
@@ -204,6 +211,12 @@ module.exports = {
         runs: 200,
       },
     },
+  },
+  paths: {
+    sources: "./contracts",
+    tests: "./test",
+    cache: "./cache",
+    artifacts: "./artifacts",
   },
   networks: {
     bscMainnet: {
@@ -234,6 +247,8 @@ module.exports = {
     currency: "USD",
   },
 };
+
+export default config;
 ```
 
 ---
@@ -269,19 +284,19 @@ npx hardhat compile
 ### Deploy to Local Hardhat Network
 
 ```bash
-npx hardhat run src/scripts/deploy.js
+npx hardhat run scripts/deploy.ts
 ```
 
 ### Deploy to BSC Testnet
 
 ```bash
-npx hardhat run src/scripts/deploy.js --network bscTestnet
+npx hardhat run scripts/deploy.ts --network bscTestnet
 ```
 
 ### Deploy to BSC Mainnet
 
 ```bash
-npx hardhat run src/scripts/deploy.js --network bscMainnet
+npx hardhat run scripts/deploy.ts --network bscMainnet
 ```
 
 Output:
@@ -311,7 +326,7 @@ If the contract has no constructor arguments, this is all that's needed. BscScan
 ### Commit a Decision
 
 ```bash
-npx hardhat run src/scripts/commit.js --network bscMainnet \
+npx hardhat run scripts/commit.ts --network bscMainnet \
   -- --contract 0xYourContractAddress \
   --decision "BUY_BNB_AT_580" \
   --nonce "randomNonce123"
@@ -329,7 +344,7 @@ Commit ID: 0
 ### Reveal a Decision
 
 ```bash
-npx hardhat run src/scripts/reveal.js --network bscMainnet \
+npx hardhat run scripts/reveal.ts --network bscMainnet \
   -- --contract 0xYourContractAddress \
   --commit-id 0 \
   --decision "BUY_BNB_AT_580" \
@@ -348,7 +363,7 @@ Reveal successful
 ### Verify (Replay) a Commitment
 
 ```bash
-npx hardhat run src/scripts/verify.js --network bscMainnet \
+npx hardhat run scripts/replay.ts --network bscMainnet \
   -- --contract 0xYourContractAddress \
   --commit-id 0
 ```
@@ -406,7 +421,7 @@ REPORT_GAS=true npx hardhat test
 ### Run Specific Test File
 
 ```bash
-npx hardhat test test/ClawCommit.test.js
+npx hardhat test test/ClawCommit.test.ts
 ```
 
 ### Run with Coverage
