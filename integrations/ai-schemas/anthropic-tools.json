@@ -1,0 +1,136 @@
+[
+  {
+    "name": "clawcommit_commit",
+    "description": "Commit an AI decision hash to BNB Chain using the ClawCommit protocol. The decision is hashed with a nonce and the hash is stored onchain. The decision remains private until revealed. Returns the commit ID and nonce (save the nonce for reveal).",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "description": "The AI decision to commit (e.g., 'APPROVE_TRADE_42', or a JSON-encoded decision object). This will be hashed with the nonce before committing."
+        },
+        "nonce": {
+          "type": "string",
+          "description": "Optional cryptographic nonce for the commitment. If omitted, a secure random nonce is generated automatically. Must be saved for later reveal."
+        },
+        "contract_address": {
+          "type": "string",
+          "description": "The deployed ClawCommit contract address on BSC (BNB Smart Chain). Must be a valid Ethereum address format (0x...)."
+        },
+        "private_key": {
+          "type": "string",
+          "description": "The private key of the wallet making the commitment. Required to sign the transaction."
+        },
+        "rpc_url": {
+          "type": "string",
+          "description": "Optional BNB Smart Chain RPC endpoint URL. Defaults to public BSC mainnet RPC if not provided."
+        }
+      },
+      "required": ["decision", "contract_address", "private_key"]
+    }
+  },
+  {
+    "name": "clawcommit_reveal",
+    "description": "Reveal a previously committed AI decision onchain. This makes the decision and nonce public and verifies the hash matches the original commitment. Can only be called by the original committer.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "commit_id": {
+          "type": "integer",
+          "description": "The ID of the commitment to reveal. This was returned when the commitment was created."
+        },
+        "decision": {
+          "type": "string",
+          "description": "The original decision string that was committed. Must exactly match the original decision."
+        },
+        "nonce": {
+          "type": "string",
+          "description": "The nonce that was used during the commit phase. Must exactly match the original nonce."
+        },
+        "contract_address": {
+          "type": "string",
+          "description": "The deployed ClawCommit contract address on BSC. Must be the same contract where the commitment was made."
+        },
+        "private_key": {
+          "type": "string",
+          "description": "The private key of the wallet that made the original commitment. Must be the same wallet."
+        },
+        "rpc_url": {
+          "type": "string",
+          "description": "Optional BNB Smart Chain RPC endpoint URL. Defaults to public BSC mainnet RPC if not provided."
+        }
+      },
+      "required": ["commit_id", "decision", "nonce", "contract_address", "private_key"]
+    }
+  },
+  {
+    "name": "clawcommit_verify",
+    "description": "Verify a revealed commitment by replaying the hash computation. This proves that the revealed decision and nonce produce the original committed hash, ensuring tamper-evidence. Can be called by anyone.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "commit_id": {
+          "type": "integer",
+          "description": "The ID of the commitment to verify. The commitment must have been revealed before it can be verified."
+        },
+        "contract_address": {
+          "type": "string",
+          "description": "The deployed ClawCommit contract address on BSC where the commitment exists."
+        },
+        "rpc_url": {
+          "type": "string",
+          "description": "Optional BNB Smart Chain RPC endpoint URL. Defaults to public BSC mainnet RPC if not provided."
+        }
+      },
+      "required": ["commit_id", "contract_address"]
+    }
+  },
+  {
+    "name": "clawcommit_compute_hash",
+    "description": "Compute the keccak256 hash for a given decision and nonce without writing to the blockchain. This is a utility function to preview what hash will be committed, or to manually verify a commitment locally.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "description": "The decision string to hash."
+        },
+        "nonce": {
+          "type": "string",
+          "description": "The nonce string to combine with the decision."
+        },
+        "contract_address": {
+          "type": "string",
+          "description": "The deployed ClawCommit contract address on BSC. Used to call the pure function."
+        },
+        "rpc_url": {
+          "type": "string",
+          "description": "Optional BNB Smart Chain RPC endpoint URL. Defaults to public BSC mainnet RPC if not provided."
+        }
+      },
+      "required": ["decision", "nonce", "contract_address"]
+    }
+  },
+  {
+    "name": "clawcommit_get_commitment",
+    "description": "Retrieve full commitment data from the blockchain including hash, timestamp, committer address, reveal status, and revealed decision/nonce if available. This is a read-only operation.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "commit_id": {
+          "type": "integer",
+          "description": "The ID of the commitment to retrieve."
+        },
+        "contract_address": {
+          "type": "string",
+          "description": "The deployed ClawCommit contract address on BSC."
+        },
+        "rpc_url": {
+          "type": "string",
+          "description": "Optional BNB Smart Chain RPC endpoint URL. Defaults to public BSC mainnet RPC if not provided."
+        }
+      },
+      "required": ["commit_id", "contract_address"]
+    }
+  }
+]

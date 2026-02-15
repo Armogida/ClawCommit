@@ -3,7 +3,9 @@ import { ethers } from "hardhat";
 interface RevealArgs {
   contract: string;
   commitId: number;
-  decision: string;
+  prompt: string;
+  output: string;
+  modelVersion: string;
   nonce: string;
 }
 
@@ -16,12 +18,14 @@ function parseArgs(): RevealArgs {
 
   const contract = get("--contract");
   const commitIdStr = get("--commit-id");
-  const decision = get("--decision");
+  const prompt = get("--prompt");
+  const output = get("--output");
+  const modelVersion = get("--model-version");
   const nonce = get("--nonce");
 
-  if (!contract || !commitIdStr || !decision || !nonce) {
+  if (!contract || !commitIdStr || !prompt || !output || !modelVersion || !nonce) {
     console.error(
-      "Usage: npx hardhat run scripts/reveal.ts --network <NETWORK> -- --contract <ADDR> --commit-id <ID> --decision <DECISION> --nonce <NONCE>"
+      "Usage: npx hardhat run scripts/reveal.ts --network <NETWORK> -- --contract <ADDR> --commit-id <ID> --prompt <PROMPT> --output <OUTPUT> --model-version <MODEL_VERSION> --nonce <NONCE>"
     );
     process.exit(1);
   }
@@ -29,30 +33,40 @@ function parseArgs(): RevealArgs {
   return {
     contract,
     commitId: parseInt(commitIdStr),
-    decision,
+    prompt,
+    output,
+    modelVersion,
     nonce,
   };
 }
 
 async function main(): Promise<void> {
-  const { contract: contractAddress, commitId, decision, nonce } = parseArgs();
+  const { contract: contractAddress, commitId, prompt, output, modelVersion, nonce } = parseArgs();
 
   const ClawCommit = await ethers.getContractFactory("ClawCommit");
   const contract = ClawCommit.attach(contractAddress);
 
   console.log("Revealing commitment", commitId);
-  console.log("Decision:", decision);
-  console.log("Nonce:   ", nonce);
+  console.log("Prompt:       ", prompt);
+  console.log("Output:       ", output);
+  console.log("Model Version:", modelVersion);
+  console.log("Nonce:        ", nonce);
   console.log("");
 
-  const tx = await contract.reveal(commitId, decision, nonce);
+  const tx = await contract.revealDecision(
+    commitId,
+    prompt,
+    output,
+    modelVersion,
+    nonce
+  );
   const receipt = await tx.wait();
 
   console.log("Reveal Tx:", receipt?.hash);
   console.log("Reveal successful.");
 
   // Verify immediately after reveal
-  const verified = await contract.verify(commitId);
+  const verified = await contract.verifyReplay(commitId);
   console.log("On-chain verify:", verified);
 }
 

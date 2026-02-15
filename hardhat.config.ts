@@ -21,6 +21,13 @@ const config: HardhatUserConfig = {
     artifacts: "./artifacts",
   },
   networks: {
+    bsc: {
+      url: (process.env.BSC_RPC_URL || "").trim() || "https://bsc-dataseed.binance.org/",
+      chainId: 56,
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
     bscMainnet: {
       url: (process.env.BSC_RPC_URL || "").trim() || "https://bsc-dataseed.binance.org/",
       chainId: 56,

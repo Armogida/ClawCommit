@@ -1,0 +1,95 @@
+# Example: AI Code Review with Blockchain Audit
+# This workflow runs an AI code review and commits the decision to BNB Chain
+
+name: AI Code Review Audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  ai-review-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run AI Code Review
+        id: ai-review
+        run: |
+          # Example: Run your AI code review tool
+          # This could be Claude, GPT-4, or any AI service
+
+          # Simulate AI review (replace with actual AI call)
+          REVIEW_RESULT="APPROVED"
+          CONFIDENCE="0.95"
+          ISSUES_FOUND="0"
+
+          echo "result=$REVIEW_RESULT" >> $GITHUB_OUTPUT
+          echo "confidence=$CONFIDENCE" >> $GITHUB_OUTPUT
+          echo "issues=$ISSUES_FOUND" >> $GITHUB_OUTPUT
+
+      - name: Create Decision String
+        id: decision
+        run: |
+          DECISION="AI_REVIEW_${{ steps.ai-review.outputs.result }}_PR_${{ github.event.pull_request.number }}_SHA_${{ github.event.pull_request.head.sha }}_CONFIDENCE_${{ steps.ai-review.outputs.confidence }}_ISSUES_${{ steps.ai-review.outputs.issues }}"
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+
+      - name: Commit to Blockchain
+        id: commit
+        uses: Armogida/ClawCommit/integrations/github-action@main
+        with:
+          action: commit
+          decision: ${{ steps.decision.outputs.decision }}
+          contract-address: ${{ secrets.CLAWCOMMIT_CONTRACT }}
+          private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          rpc-url: ${{ secrets.BSC_RPC_URL }}
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## 🔒 AI Review Committed to Blockchain
+
+            **Review Result**: ${{ steps.ai-review.outputs.result }}
+            **Confidence**: ${{ steps.ai-review.outputs.confidence }}
+            **Issues Found**: ${{ steps.ai-review.outputs.issues }}
+
+            ### Blockchain Commitment
+            - **Commit ID**: ${{ steps.commit.outputs.commit-id }}
+            - **Hash**: \`${{ steps.commit.outputs.hash }}\`
+            - **Transaction**: [View on BSCScan](https://bscscan.com/tx/${{ steps.commit.outputs.tx-hash }})
+
+            *This AI decision has been cryptographically committed to BNB Chain and cannot be altered.*
+
+            ---
+            🤖 Powered by [ClawCommit](https://github.com/Armogida/ClawCommit)
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Store Commit Data
+        run: |
+          mkdir -p .clawcommit
+          echo "COMMIT_ID=${{ steps.commit.outputs.commit-id }}" > .clawcommit/pr-${{ github.event.pull_request.number }}.txt
+          echo "NONCE=${{ steps.commit.outputs.nonce }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
+          echo "DECISION=${{ steps.decision.outputs.decision }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
+          echo "HASH=${{ steps.commit.outputs.hash }}" >> .clawcommit/pr-${{ github.event.pull_request.number }}.txt
+
+      - name: Upload Commit Data as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clawcommit-pr-${{ github.event.pull_request.number }}
+          path: .clawcommit/pr-${{ github.event.pull_request.number }}.txt
+          retention-days: 90

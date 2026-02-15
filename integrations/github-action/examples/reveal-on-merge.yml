@@ -1,0 +1,88 @@
+# Example: Reveal AI Decision After PR Merge
+# This workflow reveals the committed AI decision once a PR is merged
+
+name: Reveal AI Decision on Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  reveal-if-merged:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Download Commit Data
+        uses: actions/download-artifact@v4
+        with:
+          name: clawcommit-pr-${{ github.event.pull_request.number }}
+        continue-on-error: true
+
+      - name: Check if Commit Data Exists
+        id: check
+        run: |
+          if [ -f "pr-${{ github.event.pull_request.number }}.txt" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read Commit Data
+        if: steps.check.outputs.exists == 'true'
+        id: read
+        run: |
+          COMMIT_ID=$(grep COMMIT_ID pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
+          NONCE=$(grep NONCE pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
+          DECISION=$(grep DECISION pr-${{ github.event.pull_request.number }}.txt | cut -d'=' -f2)
+
+          echo "commit_id=$COMMIT_ID" >> $GITHUB_OUTPUT
+          echo "nonce=$NONCE" >> $GITHUB_OUTPUT
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+
+      - name: Reveal AI Decision
+        if: steps.check.outputs.exists == 'true'
+        id: reveal
+        uses: Armogida/ClawCommit/integrations/github-action@main
+        with:
+          action: reveal
+          commit-id: ${{ steps.read.outputs.commit_id }}
+          decision: ${{ steps.read.outputs.decision }}
+          nonce: ${{ steps.read.outputs.nonce }}
+          contract-address: ${{ secrets.CLAWCOMMIT_CONTRACT }}
+          private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+
+      - name: Comment on PR
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## ✅ AI Decision Revealed
+
+            The AI review decision for this merged PR has been revealed on-chain.
+
+            ### Blockchain Details
+            - **Commit ID**: ${{ steps.read.outputs.commit_id }}
+            - **Decision**: \`${{ steps.read.outputs.decision }}\`
+            - **Reveal Transaction**: [View on BSCScan](https://bscscan.com/tx/${{ steps.reveal.outputs.tx-hash }})
+
+            The decision is now publicly verifiable on BNB Chain.
+
+            ---
+            🤖 Powered by [ClawCommit](https://github.com/Armogida/ClawCommit)
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: No Commit Data Found
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          echo "No commit data found for this PR. Skipping reveal."
+          echo "This may happen if the PR was created before the AI review workflow was added."

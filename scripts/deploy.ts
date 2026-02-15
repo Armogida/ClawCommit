@@ -9,13 +9,18 @@ async function main(): Promise<void> {
   await clawCommit.waitForDeployment();
 
   const address = await clawCommit.getAddress();
+  const deployTxHash = clawCommit.deploymentTransaction()?.hash;
   const chainId = (await ethers.provider.getNetwork()).chainId;
 
   console.log("ClawCommit deployed to:", address);
+  console.log("Deployment Tx:", deployTxHash || "unknown");
   console.log("Chain ID:", chainId.toString());
   console.log("");
   console.log("Update bsc.address with:");
   console.log(`  Contract Address: ${address}`);
+  if (deployTxHash) {
+    console.log(`  Deployment Tx: ${deployTxHash}`);
+  }
 }
 
 main()

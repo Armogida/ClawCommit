@@ -1,0 +1,30 @@
+# Source files (only ship compiled code)
+src/
+
+# Tests
+test.ts
+examples.ts
+*.test.ts
+
+# Config files
+tsconfig.json
+.gitignore
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Keep these
+!dist/
+!README.md
+!package.json

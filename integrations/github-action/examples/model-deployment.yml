@@ -1,0 +1,150 @@
+# Example: AI Model Deployment Audit
+# Commits AI model deployment metadata to blockchain for compliance and auditing
+
+name: AI Model Deployment Audit
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      model-version:
+        description: 'Model version being deployed'
+        required: true
+        type: string
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+jobs:
+  commit-deployment:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract Deployment Info
+        id: info
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            ENV="production"
+          else
+            VERSION="${{ github.event.inputs.model-version }}"
+            ENV="${{ github.event.inputs.environment }}"
+          fi
+
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          SHA="${{ github.sha }}"
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Generate Model Checksum
+        id: checksum
+        run: |
+          # Example: Generate checksum of model files
+          # Replace with your actual model file paths
+          if [ -d "models/" ]; then
+            CHECKSUM=$(find models/ -type f -exec sha256sum {} \; | sha256sum | cut -d' ' -f1)
+          else
+            CHECKSUM="no-model-files"
+          fi
+          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+
+      - name: Create Deployment Decision
+        id: decision
+        run: |
+          DECISION="MODEL_DEPLOYMENT_v${{ steps.info.outputs.version }}_ENV_${{ steps.info.outputs.environment }}_SHA_${{ steps.info.outputs.sha }}_CHECKSUM_${{ steps.checksum.outputs.checksum }}_TIME_${{ steps.info.outputs.timestamp }}"
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+
+      - name: Commit Deployment to Blockchain
+        id: commit
+        uses: Armogida/ClawCommit/integrations/github-action@main
+        with:
+          action: commit
+          decision: ${{ steps.decision.outputs.decision }}
+          contract-address: ${{ secrets.CLAWCOMMIT_CONTRACT }}
+          private-key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+
+      - name: Store Deployment Record
+        run: |
+          mkdir -p deployment-records
+          cat > deployment-records/deployment-${{ steps.info.outputs.version }}.json <<EOF
+          {
+            "version": "${{ steps.info.outputs.version }}",
+            "environment": "${{ steps.info.outputs.environment }}",
+            "timestamp": "${{ steps.info.outputs.timestamp }}",
+            "commit_sha": "${{ steps.info.outputs.sha }}",
+            "model_checksum": "${{ steps.checksum.outputs.checksum }}",
+            "blockchain_commit_id": "${{ steps.commit.outputs.commit-id }}",
+            "blockchain_hash": "${{ steps.commit.outputs.hash }}",
+            "blockchain_nonce": "${{ steps.commit.outputs.nonce }}",
+            "transaction_hash": "${{ steps.commit.outputs.tx-hash }}"
+          }
+          EOF
+
+      - name: Upload Deployment Record
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-record-${{ steps.info.outputs.version }}
+          path: deployment-records/deployment-${{ steps.info.outputs.version }}.json
+          retention-days: 365
+
+      - name: Create Deployment Summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          ## 🚀 AI Model Deployment Audit
+
+          ### Deployment Information
+          - **Version**: ${{ steps.info.outputs.version }}
+          - **Environment**: ${{ steps.info.outputs.environment }}
+          - **Timestamp**: ${{ steps.info.outputs.timestamp }}
+          - **Commit SHA**: ${{ steps.info.outputs.sha }}
+          - **Model Checksum**: \`${{ steps.checksum.outputs.checksum }}\`
+
+          ### Blockchain Commitment
+          - **Commit ID**: ${{ steps.commit.outputs.commit-id }}
+          - **Hash**: \`${{ steps.commit.outputs.hash }}\`
+          - **Nonce**: \`${{ steps.commit.outputs.nonce }}\`
+          - **Transaction**: [View on BSCScan](https://bscscan.com/tx/${{ steps.commit.outputs.tx-hash }})
+
+          ### Decision String
+          \`\`\`
+          ${{ steps.decision.outputs.decision }}
+          \`\`\`
+
+          This deployment has been cryptographically committed to BNB Chain for compliance and audit purposes.
+
+          ---
+          🤖 Powered by [ClawCommit](https://github.com/Armogida/ClawCommit)
+          EOF
+
+      - name: Notify on Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 AI Model Deployment Audit Failed',
+              body: `Failed to commit deployment audit for version ${{ steps.info.outputs.version }} to blockchain.
+
+              **Environment**: ${{ steps.info.outputs.environment }}
+              **Timestamp**: ${{ steps.info.outputs.timestamp }}
+
+              Please investigate and retry.
+              `,
+              labels: ['deployment', 'blockchain', 'urgent']
+            });

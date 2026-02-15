@@ -1,0 +1,45 @@
+name: 'ClawCommit - AI Decision Audit'
+description: 'Commit and optionally reveal AI decisions to BNB Chain using the ClawCommit protocol'
+branding:
+  icon: 'lock'
+  color: 'blue'
+
+inputs:
+  action:
+    description: 'Action to perform: commit, reveal, or verify'
+    required: true
+  decision:
+    description: 'The AI decision string to commit'
+    required: false
+  nonce:
+    description: 'Nonce for commit/reveal (auto-generated if omitted for commit)'
+    required: false
+  commit-id:
+    description: 'Commit ID for reveal/verify operations'
+    required: false
+  contract-address:
+    description: 'ClawCommit contract address on BSC'
+    required: true
+  rpc-url:
+    description: 'BSC RPC URL'
+    required: false
+    default: 'https://bsc-dataseed.binance.org/'
+  private-key:
+    description: 'Deployer private key (use GitHub Secrets)'
+    required: false
+
+outputs:
+  commit-id:
+    description: 'The commit ID from a commit operation'
+  hash:
+    description: 'The keccak256 hash'
+  nonce:
+    description: 'The nonce used'
+  tx-hash:
+    description: 'Transaction hash'
+  verified:
+    description: 'Verification result (true/false)'
+
+runs:
+  using: 'node20'
+  main: 'index.js'
