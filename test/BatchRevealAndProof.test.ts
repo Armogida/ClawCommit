@@ -86,7 +86,12 @@ describe("Batch Reveal and Proof Verification", function () {
       await contract.commitBatch(root, 3, "v2", manifestHash);
 
       // Reveal leaf at index 1
-      await contract.revealBatchLeaf(0, 1, "p1", "o1", "n1");
+      const proof = generateProof(1, leaves);
+      await contract.revealBatchLeaf(
+        0,
+        { leafIndex: 1, prompt: "p1", output: "o1", nonce: "n1" },
+        { siblings: proof.siblings, path: proof.path }
+      );
 
       // Verify revealed leaf data
       const revealedLeaf = await contract.getRevealedLeaf(0, 1);
@@ -112,7 +117,14 @@ describe("Batch Reveal and Proof Verification", function () {
       await contract.commitBatch(root, 2, "v2", manifestHash);
 
       // Reveal and check event
-      await expect(contract.revealBatchLeaf(0, 0, "p0", "o0", "n0"))
+      const proof = generateProof(0, leaves);
+      await expect(
+        contract.revealBatchLeaf(
+          0,
+          { leafIndex: 0, prompt: "p0", output: "o0", nonce: "n0" },
+          { siblings: proof.siblings, path: proof.path }
+        )
+      )
         .to.emit(contract, "BatchLeafRevealed")
         .withArgs(0, 0, leaves[0], signer.address, "p0", "o0");
     });
@@ -131,8 +143,15 @@ describe("Batch Reveal and Proof Verification", function () {
       await contract.connect(signer1).commitBatch(root, 2, "v2", manifestHash);
 
       // Signer2 tries to reveal - should fail
+      const proof = generateProof(0, leaves);
       await expect(
-        contract.connect(signer2).revealBatchLeaf(0, 0, "p0", "o0", "n0")
+        contract
+          .connect(signer2)
+          .revealBatchLeaf(
+            0,
+            { leafIndex: 0, prompt: "p0", output: "o0", nonce: "n0" },
+            { siblings: proof.siblings, path: proof.path }
+          )
       ).to.be.revertedWithCustomError(contract, "OnlyBatchCommitter");
     });
 
@@ -150,11 +169,20 @@ describe("Batch Reveal and Proof Verification", function () {
       await contract.commitBatch(root, 2, "v2", manifestHash);
 
       // First reveal - should succeed
-      await contract.revealBatchLeaf(0, 0, "p0", "o0", "n0");
+      const proof = generateProof(0, leaves);
+      await contract.revealBatchLeaf(
+        0,
+        { leafIndex: 0, prompt: "p0", output: "o0", nonce: "n0" },
+        { siblings: proof.siblings, path: proof.path }
+      );
 
       // Second reveal of same leaf - should fail
       await expect(
-        contract.revealBatchLeaf(0, 0, "p0", "o0", "n0")
+        contract.revealBatchLeaf(
+          0,
+          { leafIndex: 0, prompt: "p0", output: "o0", nonce: "n0" },
+          { siblings: proof.siblings, path: proof.path }
+        )
       ).to.be.revertedWithCustomError(contract, "LeafAlreadyRevealed");
     });
 
@@ -174,12 +202,20 @@ describe("Batch Reveal and Proof Verification", function () {
 
       // Try to reveal leaf at index 3 (out of range)
       await expect(
-        contract.revealBatchLeaf(0, 3, "p3", "o3", "n3")
+        contract.revealBatchLeaf(
+          0,
+          { leafIndex: 3, prompt: "p3", output: "o3", nonce: "n3" },
+          { siblings: [], path: [] }
+        )
       ).to.be.revertedWithCustomError(contract, "LeafIndexOutOfRange");
 
       // Try to reveal leaf at index 100 (way out of range)
       await expect(
-        contract.revealBatchLeaf(0, 100, "p100", "o100", "n100")
+        contract.revealBatchLeaf(
+          0,
+          { leafIndex: 100, prompt: "p100", output: "o100", nonce: "n100" },
+          { siblings: [], path: [] }
+        )
       ).to.be.revertedWithCustomError(contract, "LeafIndexOutOfRange");
     });
 
@@ -199,9 +235,24 @@ describe("Batch Reveal and Proof Verification", function () {
       await contract.commitBatch(root, 4, "v2", manifestHash);
 
       // Reveal leaves at indices 0, 2, 3
-      await contract.revealBatchLeaf(0, 0, "p0", "o0", "n0");
-      await contract.revealBatchLeaf(0, 2, "p2", "o2", "n2");
-      await contract.revealBatchLeaf(0, 3, "p3", "o3", "n3");
+      const proof0 = generateProof(0, leaves);
+      const proof2 = generateProof(2, leaves);
+      const proof3 = generateProof(3, leaves);
+      await contract.revealBatchLeaf(
+        0,
+        { leafIndex: 0, prompt: "p0", output: "o0", nonce: "n0" },
+        { siblings: proof0.siblings, path: proof0.path }
+      );
+      await contract.revealBatchLeaf(
+        0,
+        { leafIndex: 2, prompt: "p2", output: "o2", nonce: "n2" },
+        { siblings: proof2.siblings, path: proof2.path }
+      );
+      await contract.revealBatchLeaf(
+        0,
+        { leafIndex: 3, prompt: "p3", output: "o3", nonce: "n3" },
+        { siblings: proof3.siblings, path: proof3.path }
+      );
 
       // Verify all revealed leaves
       const leaf0 = await contract.getRevealedLeaf(0, 0);
@@ -271,26 +322,77 @@ describe("Batch Reveal and Proof Verification", function () {
       await contract.connect(signer2).commitBatch(root2, 2, "v3", manifestHash2);
 
       // Signer1 can reveal from batch 0
-      await contract.connect(signer1).revealBatchLeaf(0, 0, "p0", "o0", "n0");
+      const proofBatch0 = generateProof(0, leaves1);
+      await contract
+        .connect(signer1)
+        .revealBatchLeaf(
+          0,
+          { leafIndex: 0, prompt: "p0", output: "o0", nonce: "n0" },
+          { siblings: proofBatch0.siblings, path: proofBatch0.path }
+        );
       const leaf1 = await contract.getRevealedLeaf(0, 0);
       expect(leaf1.revealed).to.be.true;
       expect(leaf1.prompt).to.equal("p0");
 
       // Signer2 can reveal from batch 1
-      await contract.connect(signer2).revealBatchLeaf(1, 1, "p3", "o3", "n3");
+      const proofBatch1 = generateProof(1, leaves2);
+      await contract
+        .connect(signer2)
+        .revealBatchLeaf(
+          1,
+          { leafIndex: 1, prompt: "p3", output: "o3", nonce: "n3" },
+          { siblings: proofBatch1.siblings, path: proofBatch1.path }
+        );
       const leaf2 = await contract.getRevealedLeaf(1, 1);
       expect(leaf2.revealed).to.be.true;
       expect(leaf2.prompt).to.equal("p3");
 
       // Signer1 cannot reveal from batch 1
       await expect(
-        contract.connect(signer1).revealBatchLeaf(1, 0, "p2", "o2", "n2")
+        contract
+          .connect(signer1)
+          .revealBatchLeaf(
+            1,
+            { leafIndex: 0, prompt: "p2", output: "o2", nonce: "n2" },
+            { siblings: proofBatch1.siblings, path: proofBatch1.path }
+          )
       ).to.be.revertedWithCustomError(contract, "OnlyBatchCommitter");
 
       // Signer2 cannot reveal from batch 0
       await expect(
-        contract.connect(signer2).revealBatchLeaf(0, 1, "p1", "o1", "n1")
+        contract
+          .connect(signer2)
+          .revealBatchLeaf(
+            0,
+            { leafIndex: 1, prompt: "p1", output: "o1", nonce: "n1" },
+            { siblings: proofBatch0.siblings, path: proofBatch0.path }
+          )
       ).to.be.revertedWithCustomError(contract, "OnlyBatchCommitter");
+    });
+
+    it("should revert with LeafHashMismatch when reveal proof is invalid", async function () {
+      const leaves = [
+        computeLeafHash("p0", "o0", "v2", "n0", 0),
+        computeLeafHash("p1", "o1", "v2", "n1", 1),
+        computeLeafHash("p2", "o2", "v2", "n2", 2),
+        computeLeafHash("p3", "o3", "v2", "n3", 3),
+      ];
+      const root = computeMerkleRoot(leaves);
+      const manifestHash = ethers.keccak256(ethers.toUtf8Bytes("manifest-invalid-proof"));
+
+      await contract.commitBatch(root, 4, "v2", manifestHash);
+
+      const proof = generateProof(1, leaves);
+      const invalidSiblings = [...proof.siblings];
+      invalidSiblings[0] = computeLeafHash("bad", "bad", "v2", "bad", 99);
+
+      await expect(
+        contract.revealBatchLeaf(
+          0,
+          { leafIndex: 1, prompt: "p1", output: "o1", nonce: "n1" },
+          { siblings: invalidSiblings, path: proof.path }
+        )
+      ).to.be.revertedWithCustomError(contract, "LeafHashMismatch");
     });
   });
 
@@ -468,12 +570,16 @@ describe("Batch Reveal and Proof Verification", function () {
 
       // Step 2: Reveal a specific leaf (index 2)
       const leafToReveal = 2;
+      const revealProof = generateProof(leafToReveal, leaves);
       await contract.revealBatchLeaf(
         0,
-        leafToReveal,
-        decisions[leafToReveal].prompt,
-        decisions[leafToReveal].output,
-        decisions[leafToReveal].nonce
+        {
+          leafIndex: leafToReveal,
+          prompt: decisions[leafToReveal].prompt,
+          output: decisions[leafToReveal].output,
+          nonce: decisions[leafToReveal].nonce,
+        },
+        { siblings: revealProof.siblings, path: revealProof.path }
       );
 
       // Verify reveal was successful

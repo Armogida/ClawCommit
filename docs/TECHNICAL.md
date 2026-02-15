@@ -167,6 +167,8 @@ Wave 1 introduces root-level batch commitments in `contracts/ClawCommitBatch.sol
 - `commitBatch(bytes32 merkleRoot, uint32 leafCount, string modelVersion, bytes32 manifestHash) returns (uint256 batchId)`
 - `getBatch(uint256 batchId) returns (BatchCommitment)`
 - `computeLeafHash(string prompt, string output, string modelVersion, string nonce, uint256 leafIndex) returns (bytes32)`
+- `revealBatchLeaf(uint256 batchId, LeafRevealData reveal, MerkleProofData proof)` stores a revealed leaf only if its proof reconstructs the batch root
+- `verifyBatchInclusion(uint256 batchId, bytes32 leafHash, bytes32[] siblings, bool[] path) returns (bool)`
 
 ### Canonical hashing rules
 
@@ -186,6 +188,9 @@ Wave 1 scripts:
 - `scripts/batch/recomputeRoot.ts` - recompute and validate manifest root.
 - `scripts/batch/commitBatch.ts` - commit root onchain.
 - `scripts/batch/getBatch.ts` - read committed batch metadata.
+- `scripts/batch/generateProof.ts` - generate Merkle proof for a specific leaf.
+- `scripts/batch/revealLeaf.ts` - reveal a leaf onchain with proof.
+- `scripts/batch/replayBatch.ts` - deterministic batch replay locally or against onchain batch metadata.
 
 Commands:
 
@@ -205,4 +210,21 @@ HARDHAT_NETWORK=bsc npx ts-node scripts/batch/commitBatch.ts \
 HARDHAT_NETWORK=bsc npx ts-node scripts/batch/getBatch.ts \
   --contract <BATCH_CONTRACT_ADDRESS> \
   --batch-id 0
+
+npx ts-node scripts/batch/generateProof.ts \
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --leaf-index 1 \
+  --out artifacts/batches/batch-001-leaf-1.proof.json
+
+HARDHAT_NETWORK=bsc npx ts-node scripts/batch/revealLeaf.ts \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --batch-id 0 \
+  --leaf-index 1 \
+  --manifest artifacts/batches/batch-001.manifest.json
+
+npx ts-node scripts/batch/replayBatch.ts \
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --batch-id 0 \
+  --network bsc
 ```

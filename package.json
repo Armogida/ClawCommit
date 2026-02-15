@@ -19,7 +19,10 @@
     "batch:recompute": "ts-node scripts/batch/recomputeRoot.ts",
     "batch:deploy": "hardhat run scripts/batch/deployBatch.ts --network bsc",
     "batch:commit": "HARDHAT_NETWORK=bsc ts-node scripts/batch/commitBatch.ts",
-    "batch:get": "HARDHAT_NETWORK=bsc ts-node scripts/batch/getBatch.ts"
+    "batch:get": "HARDHAT_NETWORK=bsc ts-node scripts/batch/getBatch.ts",
+    "batch:proof": "ts-node scripts/batch/generateProof.ts",
+    "batch:reveal-leaf": "HARDHAT_NETWORK=bsc ts-node scripts/batch/revealLeaf.ts",
+    "batch:replay": "ts-node scripts/batch/replayBatch.ts"
   },
   "keywords": ["bnb-chain", "bsc", "commit-reveal", "ai", "deterministic", "smart-contract"],
   "license": "MIT",

@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 import * as fs from "fs";
-import { BatchManifest } from "./merkle";
+import { BatchManifest, generateMerkleProof } from "./merkle";
 
 interface RevealLeafArgs {
   contract: string;
@@ -22,7 +22,7 @@ function parseArgs(argv: string[]): RevealLeafArgs {
 
   if (!contract || !batchIdStr || !leafIndexStr || !manifestPath) {
     throw new Error(
-      "Usage: npx hardhat run scripts/batch/revealLeaf.ts --network <NETWORK> -- --contract <ADDR> --batch-id <ID> --leaf-index <INDEX> --manifest <MANIFEST_JSON>"
+      "Usage: HARDHAT_NETWORK=<NETWORK> npx ts-node scripts/batch/revealLeaf.ts --contract <ADDR> --batch-id <ID> --leaf-index <INDEX> --manifest <MANIFEST_JSON>"
     );
   }
 
@@ -88,13 +88,21 @@ async function main(): Promise<void> {
 
   const Factory = await ethers.getContractFactory("ClawCommitBatch");
   const contract = Factory.attach(contractAddress);
+  const leafHashes = manifest.leaves.map((entry) => entry.leafHash);
+  const proof = generateMerkleProof(leafHashes, leafIndex);
 
   const tx = await contract.revealBatchLeaf(
     batchId,
-    leafIndex,
-    leaf.prompt,
-    leaf.output,
-    leaf.nonce
+    {
+      leafIndex,
+      prompt: leaf.prompt,
+      output: leaf.output,
+      nonce: leaf.nonce,
+    },
+    {
+      siblings: proof.siblings,
+      path: proof.path,
+    }
   );
 
   console.log("Reveal Tx:  ", tx.hash);
@@ -144,8 +152,10 @@ main().catch((error) => {
     console.error("Hint: This leaf has already been revealed.");
   } else if (error.message?.includes("LeafIndexOutOfRange")) {
     console.error("Hint: The leaf index exceeds the batch leaf count.");
-  } else if (error.message?.includes("InvalidLeafHash")) {
+  } else if (error.message?.includes("LeafHashMismatch")) {
     console.error("Hint: The provided data does not match the committed leaf hash.");
+  } else if (error.message?.includes("ProofLengthMismatch")) {
+    console.error("Hint: Merkle proof siblings/path arrays are malformed.");
   } else if (error.message?.includes("insufficient funds")) {
     console.error("Hint: Account needs gas tokens for transaction fees.");
   } else if (error.message?.includes("could not detect network")) {

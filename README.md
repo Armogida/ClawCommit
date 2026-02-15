@@ -166,6 +166,45 @@ HARDHAT_NETWORK=bsc npx ts-node scripts/batch/getBatch.ts \
   --batch-id 0
 ```
 
+### Generate inclusion proof JSON
+
+```bash
+npx ts-node scripts/batch/generateProof.ts \
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --leaf-index 1 \
+  --out artifacts/batches/batch-001-leaf-1.proof.json
+```
+
+### Reveal a batch leaf onchain (with proof)
+
+```bash
+HARDHAT_NETWORK=bsc npx ts-node scripts/batch/revealLeaf.ts \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --batch-id 0 \
+  --leaf-index 1 \
+  --manifest artifacts/batches/batch-001.manifest.json
+```
+
+### Replay batch determinism
+
+Local (manifest-only):
+
+```bash
+npx ts-node scripts/batch/replayBatch.ts \
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --local
+```
+
+On-chain (root/hash cross-check):
+
+```bash
+npx ts-node scripts/batch/replayBatch.ts \
+  --manifest artifacts/batches/batch-001.manifest.json \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --batch-id 0 \
+  --network bsc
+```
+
 ## Mainnet Runbook
 
 1. Set `.env` from `.env.example`:
@@ -210,23 +249,16 @@ This project uses standard Solidity tooling with Hardhat and ethers.js. The curr
 
 Any person can verify any ClawCommit commitment independently. No wallet needed. No trust required.
 
-### Verify by Commit ID
-
-```bash
-npx hardhat run scripts/replay.ts --network bscMainnet \
-  -- --contract <CONTRACT_ADDRESS> --commit-id 0
-```
-
 ### Verify by Reveal Transaction Hash
 
 ```bash
-npx hardhat run scripts/replay.ts --network bscMainnet \
-  -- --contract <CONTRACT_ADDRESS> --tx-hash <REVEAL_TX_HASH>
+npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH>
 ```
 
-Both methods:
+Validator steps:
 1. Read the commitment data from BSC (public, free)
-2. Recompute `keccak256(abi.encodePacked(decision, nonce))` locally
+2. Decode reveal payload (`prompt/output/modelVersion/nonce`)
+3. Recompute `keccak256(abi.encode(prompt, output, modelVersion, nonce))` locally
 3. Compare against the stored hash
 4. If match → decision is cryptographically proven authentic
 
