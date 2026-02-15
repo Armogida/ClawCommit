@@ -1,0 +1,10 @@
+{
+  "network": "bscTestnet",
+  "contract": "0xF05FbbB9Ba8509042E574428D5f7C6E73e302b1A",
+  "commitId": "3",
+  "commitTx": "0x872058fd741f8c4e00db53bc3d0dff15bf5c03a599d27434280fe880a808eb0c",
+  "revealTx": "0x0d3bc492945cd6fb925c6e1dd1c0fc856d5efed2b3c467ce39b0d3942a07b8cc",
+  "nonce": "0x3333333333333333333333333333333333333333333333333333333333333333",
+  "onchainVerify": "true",
+  "replay": "verified"
+}
