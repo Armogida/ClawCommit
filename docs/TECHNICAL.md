@@ -157,3 +157,52 @@ Required env vars:
 - `BSC_RPC_URL`
 - `DEPLOYER_PRIVATE_KEY`
 - `BSCSCAN_API_KEY`
+
+## 7. Merkle Batching (Wave 1)
+
+Wave 1 introduces root-level batch commitments in `contracts/ClawCommitBatch.sol`.
+
+### Batch commitment interface
+
+- `commitBatch(bytes32 merkleRoot, uint32 leafCount, string modelVersion, bytes32 manifestHash) returns (uint256 batchId)`
+- `getBatch(uint256 batchId) returns (BatchCommitment)`
+- `computeLeafHash(string prompt, string output, string modelVersion, string nonce, uint256 leafIndex) returns (bytes32)`
+
+### Canonical hashing rules
+
+- Leaf hash:
+  - `keccak256(abi.encode(prompt, output, modelVersion, nonce, leafIndex))`
+- Parent hash:
+  - `keccak256(abi.encode(left, right))`
+- Odd-width levels:
+  - duplicate the last node in the level.
+- Leaf order:
+  - strictly ascending by `leafIndex`.
+
+### Manifest and tooling
+
+Wave 1 scripts:
+- `scripts/batch/build.ts` - build `clawcommit-batch-v1` manifest from NDJSON.
+- `scripts/batch/recomputeRoot.ts` - recompute and validate manifest root.
+- `scripts/batch/commitBatch.ts` - commit root onchain.
+- `scripts/batch/getBatch.ts` - read committed batch metadata.
+
+Commands:
+
+```bash
+npx ts-node scripts/batch/build.ts \
+  --in data/decisions-batch-001.ndjson \
+  --out artifacts/batches/batch-001.manifest.json \
+  --model-version clawcommit-v2.0
+
+npx ts-node scripts/batch/recomputeRoot.ts \
+  --manifest artifacts/batches/batch-001.manifest.json
+
+npx hardhat run scripts/batch/commitBatch.ts --network bsc -- \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --manifest artifacts/batches/batch-001.manifest.json
+
+npx hardhat run scripts/batch/getBatch.ts --network bsc -- \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --batch-id 0
+```

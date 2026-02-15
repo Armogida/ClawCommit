@@ -112,6 +112,60 @@ This writes:
 - `deployment-proof/commit-tx.txt`
 - `deployment-proof/reveal-tx.txt`
 
+## Merkle Batching (Wave 1)
+
+Wave 1 adds root-level batch commitments through `ClawCommitBatch`.
+
+Batch leaf formula:
+
+`keccak256(abi.encode(prompt, output, modelVersion, nonce, leafIndex))`
+
+Merkle parent formula:
+
+`keccak256(abi.encode(left, right))`
+
+Odd-width levels duplicate the last node.
+
+### Build a batch manifest from NDJSON
+
+```bash
+npx ts-node scripts/batch/build.ts \
+  --in data/decisions-batch-001.ndjson \
+  --out artifacts/batches/batch-001.manifest.json \
+  --model-version clawcommit-v2.0
+```
+
+### Recompute root from manifest
+
+```bash
+npx ts-node scripts/batch/recomputeRoot.ts \
+  --manifest artifacts/batches/batch-001.manifest.json
+```
+
+### Commit batch root onchain
+
+Deploy the batch contract first:
+
+```bash
+npx hardhat run scripts/batch/deployBatch.ts --network bsc
+```
+
+Then commit:
+
+```bash
+npx hardhat run scripts/batch/commitBatch.ts --network bsc -- \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --manifest artifacts/batches/batch-001.manifest.json
+```
+
+### Read committed batch
+
+```bash
+npx hardhat run scripts/batch/getBatch.ts --network bsc -- \
+  --contract <BATCH_CONTRACT_ADDRESS> \
+  --batch-id 0
+```
+
 ## Mainnet Runbook
 
 1. Set `.env` from `.env.example`:
@@ -133,10 +187,15 @@ This project uses standard Solidity tooling with Hardhat and ethers.js. The curr
 ## Repo Layout
 
 - `contracts/ClawCommit.sol` - V2 deterministic commit-reveal contract
+- `contracts/ClawCommitBatch.sol` - Wave 1 Merkle batch root commitment contract
 - `scripts/deploy.ts` - deploy script
 - `scripts/commit.ts` - commit CLI
 - `scripts/reveal.ts` - reveal CLI
 - `scripts/replay.ts` - standalone replay validator (`ts-node`)
+- `scripts/batch/build.ts` - NDJSON to manifest/tree builder
+- `scripts/batch/recomputeRoot.ts` - deterministic root recomputation
+- `scripts/batch/commitBatch.ts` - batch root commit script
+- `scripts/batch/getBatch.ts` - batch read script
 - `scripts/deployAndProve.ts` - one-shot deploy + proof files
 - `scripts/verifyContract.ts` - BscScan verification helper
 - `backend/aiPipeline.ts` - AI decision lifecycle demo

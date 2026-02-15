@@ -1,0 +1,3 @@
+{"prompt":"Should treasury hedge BTC volatility?","output":"APPROVE_HEDGE_10_PERCENT","nonce":"batch-nonce-0001"}
+{"prompt":"Should staking rewards be rebalanced this epoch?","output":"APPROVE_REWARD_SHIFT","nonce":"batch-nonce-0002"}
+{"prompt":"Should validator set expansion proceed?","output":"REJECT_FOR_NOW","nonce":"batch-nonce-0003"}
