@@ -1,0 +1,12 @@
+{
+  "network": "bsc",
+  "chainId": 56,
+  "contract": "0x23A6BF912729599F576Ffae4ed683489463617f6",
+  "deployTx": "0xa1608ddb366ce809857cdb4670b8031cbe34e0ace49ccd768f022cf0900067ea",
+  "commitId": "0",
+  "commitTx": "0x9c74986d8424a5c8d63080213531aebad818c67fa7f177c6156f843e497ecbe7",
+  "revealTx": "0x9af1bb750449716d81032537bdc7f5aa218f1a8c244e1a338d99044a9b3f64d5",
+  "nonce": "0x4444444444444444444444444444444444444444444444444444444444444444",
+  "onchainVerify": "true",
+  "replay": "verified"
+}
