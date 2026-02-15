@@ -7,6 +7,9 @@ Usage:
   decision_cycle.sh --contract <ADDR> --prompt <PROMPT> --output <OUTPUT> --model-version <VERSION>
                     [--nonce <NONCE>] [--network <NETWORK>] [--rpc <RPC_URL>]
                     [--repo <PATH>] [--skip-replay] [--json-out <PATH>]
+                    [--deploy-tx <TX_HASH>] [--links-out <PATH>]
+                    [--post-gh-pr <PR_NUMBER>] [--gh-repo <OWNER/REPO>]
+                    [--links-title <TITLE>]
 USAGE
 }
 
@@ -20,6 +23,11 @@ nonce=""
 rpc_url=""
 skip_replay="false"
 json_out=""
+deploy_tx=""
+links_out=""
+post_gh_pr=""
+gh_repo=""
+links_title="ClawCommit Decision Cycle"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,6 +41,11 @@ while [[ $# -gt 0 ]]; do
     --rpc) rpc_url="$2"; shift 2 ;;
     --skip-replay) skip_replay="true"; shift ;;
     --json-out) json_out="$2"; shift 2 ;;
+    --deploy-tx) deploy_tx="$2"; shift 2 ;;
+    --links-out) links_out="$2"; shift 2 ;;
+    --post-gh-pr) post_gh_pr="$2"; shift 2 ;;
+    --gh-repo) gh_repo="$2"; shift 2 ;;
+    --links-title) links_title="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown arg '$1'" >&2; usage; exit 1 ;;
   esac
@@ -68,8 +81,16 @@ if [[ -z "$nonce" ]]; then
   nonce="$(openssl rand -hex 16)"
 fi
 
+if [[ ( -n "$links_out" || -n "$post_gh_pr" ) && -z "$json_out" ]]; then
+  json_out="deployment-proof/decision-cycle-summary.json"
+fi
+
 if [[ -n "$json_out" ]]; then
   json_out="$(abs_path "$json_out")"
+fi
+
+if [[ -n "$links_out" ]]; then
+  links_out="$(abs_path "$links_out")"
 fi
 
 if [[ -z "$rpc_url" ]]; then
@@ -112,7 +133,7 @@ if [[ -z "$commit_id" ]]; then
 fi
 
 reveal_cmd=(
-  npx ts-node scripts/reveal.ts
+  "$ts_node_bin" scripts/reveal.ts
   --contract "$contract"
   --commit-id "$commit_id"
   --prompt "$prompt"
@@ -157,6 +178,7 @@ if [[ -n "$json_out" ]]; then
 {
   "network": "$network",
   "contract": "$contract",
+  "deployTx": "${deploy_tx}",
   "commitId": "$commit_id",
   "commitTx": "${commit_tx}",
   "revealTx": "${reveal_tx}",
@@ -166,4 +188,22 @@ if [[ -n "$json_out" ]]; then
 }
 EOF
   echo "[decision-cycle] wrote $json_out"
+fi
+
+reporter="$repo/scripts/integration/post-cycle-links.js"
+if [[ -n "$json_out" && -f "$reporter" ]]; then
+  report_cmd=(node "$reporter" --artifact "$json_out" --title "$links_title")
+
+  if [[ -n "$links_out" ]]; then
+    report_cmd+=(--out "$links_out")
+  fi
+  if [[ -n "$post_gh_pr" ]]; then
+    report_cmd+=(--post-gh-pr "$post_gh_pr")
+  fi
+  if [[ -n "$gh_repo" ]]; then
+    report_cmd+=(--repo "$gh_repo")
+  fi
+
+  echo "[decision-cycle] generating link report"
+  (cd "$repo" && "${report_cmd[@]}")
 fi

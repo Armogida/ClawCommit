@@ -11,6 +11,37 @@ ClawCommit V2 proves:
 
 This project upgrades commit-reveal into a deterministic verification primitive suitable for infra-grade audit trails.
 
+## Real-World Use Case: AI Review Audit Trail
+
+When ClawCommit is integrated into PR workflows, the "chain" of AI decisions does not live in Git commit history.  
+It lives on BNB Chain as on-chain commit/reveal records.
+
+How it works:
+
+1. AI system decides (for example, approve/reject a PR).
+2. Decision is hashed deterministically:
+   `keccak256(abi.encode(prompt, output, modelVersion, nonce))`
+3. Hash is committed on-chain, returning:
+   - `commitId`
+   - commitment hash
+   - transaction hash
+4. Reviewers use PR comments + CI artifacts to inspect commit metadata.
+5. Optional reveal (for example, on merge) publishes `prompt/output/modelVersion/nonce`.
+6. Anyone verifies integrity using:
+   - contract methods (`getCommitment`, `verifyReplay`)
+   - GitHub Action verify flow
+   - standalone replay CLI.
+
+Where reviewers/auditors look:
+
+- PR automation example (commit + PR comment + artifact):  
+  `integrations/github-action/examples/ai-review.yml`
+- Optional reveal-on-merge example:  
+  `integrations/github-action/examples/reveal-on-merge.yml`
+- Verification workflow example:  
+  `integrations/github-action/examples/verify-audit.yml`
+- Public transaction history on BscScan.
+
 ## Deterministic Replay Verification
 
 ClawCommit includes a replay validator CLI that independently recomputes AI decision hashes from onchain data. This ensures third parties can cryptographically verify agent integrity without trusting the operator.
@@ -101,6 +132,65 @@ For BSC mainnet writes, add:
 ```bash
 --allow-mainnet-writes true
 ```
+
+### Mainnet Flow (Explicit Write Flags)
+
+Use this exact sequence for production writes on BSC mainnet:
+
+```bash
+# 1) Deploy (state-changing, explicit allow flag required)
+HARDHAT_NETWORK=bsc npx ts-node scripts/deploy.ts --allow-mainnet-writes true
+
+# 2) Commit
+HARDHAT_NETWORK=bsc npx ts-node scripts/commit.ts \
+  --contract <CONTRACT_ADDRESS> \
+  --prompt "Mainnet integration test from terminal" \
+  --output "APPROVE_TEST" \
+  --model-version "clawcommit-mainnet-test-v1" \
+  --nonce "0x<32-byte-hex-nonce>" \
+  --allow-mainnet-writes true \
+  --log-sensitive true
+
+# 3) Reveal (must reuse identical prompt/output/model-version/nonce)
+HARDHAT_NETWORK=bsc npx ts-node scripts/reveal.ts \
+  --contract <CONTRACT_ADDRESS> \
+  --commit-id <COMMIT_ID> \
+  --prompt "Mainnet integration test from terminal" \
+  --output "APPROVE_TEST" \
+  --model-version "clawcommit-mainnet-test-v1" \
+  --nonce "0x<32-byte-hex-nonce>" \
+  --allow-mainnet-writes true \
+  --log-sensitive true
+
+# 4) Replay verification
+npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH> --rpc https://bsc-dataseed.binance.org/
+```
+
+### Automated Link Posting (Artifact + PR Comment)
+
+Use the report helper to convert a decision artifact JSON into shareable explorer links:
+
+```bash
+node scripts/integration/post-cycle-links.js \
+  --artifact deployment-proof/mainnet-decision-cycle.json \
+  --out deployment-proof/mainnet-decision-cycle.md
+```
+
+Post the same report directly to a pull request comment with GitHub CLI:
+
+```bash
+node scripts/integration/post-cycle-links.js \
+  --artifact deployment-proof/mainnet-decision-cycle.json \
+  --post-gh-pr <PR_NUMBER> \
+  --repo <OWNER/REPO>
+```
+
+`skills/operate-clawcommit/scripts/decision_cycle.sh` can call this automatically by passing:
+- `--deploy-tx <DEPLOY_TX_HASH>`
+- `--json-out <PATH>`
+- `--links-out <PATH>`
+- `--post-gh-pr <PR_NUMBER>` (optional)
+- `--gh-repo <OWNER/REPO>` (optional)
 
 ### 4. Replay Validator (Standalone)
 
@@ -255,6 +345,46 @@ and writes a clean transcript to:
    - `npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH>`
    - `npx hardhat run scripts/verifyContract.ts --network bsc -- --address <CONTRACT_ADDRESS>` (mainnet)
 3. Persist values in `deployment-proof/` and `bsc.address`.
+
+## Practical Cost Notes (Risk/Reward)
+
+ClawCommit is designed to make AI decisions tamper-evident without breaking your budget.
+In production, you pay gas only when you write to chain state.
+
+Typical cost ranges on BNB Chain:
+
+- Commit (log a decision): ~50,000-80,000 gas (about $0.10-$0.15)
+- Reveal (publish prompt/output/modelVersion/nonce): ~80,000-120,000 gas (about $0.15-$0.25)
+- Verify/hash checks: free (read-only or off-chain)
+- `bscTestnet`: free (testnet BNB has no monetary value)
+
+Practical budgeting:
+
+- A full commit + reveal cycle is often around $0.25 total.
+- 100 committed and revealed decisions is roughly $25 at similar gas/BNB conditions.
+- Actual USD cost varies with BNB price and gas conditions.
+- BNB Chain was chosen for low fees and fast block times, so runaway costs are less likely for normal usage.
+- A future roadmap item is batch writes to further reduce per-decision costs.
+
+Risks and overhead:
+
+- Gas expenditure: commit/reveal requires funded BNB wallets; low balance or fee spikes can stall writes.
+- Private key management: signing keys must be handled securely; do not expose keys in logs or source control.
+- Nonce/payload discipline: reveal must use the exact original prompt/output/modelVersion/nonce or verification fails.
+- Operational complexity: CI workflows need artifact storage (commit IDs/nonces) and retry logic for RPC failures.
+- Mainnet safety: keep explicit guards like `--allow-mainnet-writes true` for production writes.
+
+Rewards and benefits:
+
+- Tamper-evident, immutable decision logs with deterministic replay.
+- Trust-minimized verification by third parties without private keys.
+- Consistent transparency across CLI, MCP, GitHub Actions, and SDK flows.
+- Cost is usually negligible compared to model inference and deployment risk.
+
+Verdict:
+
+For most engineering teams, the reward outweighs the risk.
+With standard DevOps hygiene (secure keys, nonce tracking, testnet-first rollout), ClawCommit provides strong auditability for cents per decision.
 
 ## Transparency
 
