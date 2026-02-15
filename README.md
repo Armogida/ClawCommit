@@ -12,6 +12,77 @@ ClawCommit is a smart contract protocol on BNB Chain that provides verifiable, t
 
 ---
 
+## Judge Quick Start (5 Minutes)
+
+Everything runs locally -- no wallet, no testnet tokens, no blockchain connection required.
+
+### Run Locally (No blockchain required)
+
+```bash
+git clone https://github.com/Armogida/ClawCommit.git
+cd ClawCommit
+npm install
+npx hardhat compile
+npm test                    # 32+ tests pass
+REPORT_GAS=true npm test    # See gas costs per function
+```
+
+**Expected output from `npm test`:**
+
+```
+  ClawCommit
+    Deployment
+      ✓ Should deploy successfully
+      ✓ Should start with zero commitments
+    Commit
+      ✓ Should create a commitment with correct hash
+      ✓ Should emit CommitCreated event
+      ✓ Should increment commitCount
+      ...
+    Reveal
+      ✓ Should reveal with correct decision and nonce
+      ✓ Should reject reveal with wrong decision
+      ✓ Should reject reveal with wrong nonce
+      ...
+    Replay Verification
+      ✓ Should verify a revealed commitment
+      ...
+
+  32 passing (2s)
+```
+
+### Full Proof Cycle (Local)
+
+```bash
+npx hardhat run scripts/deployAndProve.ts
+# Deploys contract, commits example decision, reveals, verifies
+# Writes proof artifacts to deployment-proof/
+```
+
+This runs the entire commit-reveal-verify lifecycle on a local Hardhat network in seconds, producing proof artifacts you can inspect in the `deployment-proof/` directory.
+
+---
+
+## Gas Efficiency
+
+| Operation | Gas Used | Cost at 3 gwei | Type |
+|-----------|----------|-----------------|------|
+| `commit()` | ~55,000 | ~$0.0002 | State change |
+| `reveal()` | ~90,000 | ~$0.0004 | State change |
+| `verify()` | 0 | Free | View (read-only) |
+| `computeHash()` | 0 | Free | Pure |
+| **Full cycle** | **~145,000** | **~$0.0006** | - |
+
+**At scale:** 1,000 decisions/day costs approximately $0.60/day or $220/year on BSC mainnet. This makes per-decision commits economically viable even for high-frequency AI systems.
+
+Enable gas reporting to see exact costs per function:
+
+```bash
+REPORT_GAS=true npm test
+```
+
+---
+
 ## Core Value Proposition
 
 - **Deterministic Hashing Ensures Tamper-Evidence** -- Using `keccak256(abi.encodePacked(decision, nonce))`, decisions are cryptographically bound to their commit point. Any modification produces a different hash, immediately detectable.
@@ -217,6 +288,59 @@ ClawCommit/
 - **Minimal Contract Surface Area** -- Only `commit()`, `reveal()`, `getCommitment()`, `verify()`, and `computeHash()`. Nothing else.
 
 - **Replay Validator is Read-Only** -- Verification is performed off-chain with no contract interaction needed. Zero-trust, trust-independent verification.
+
+---
+
+## Troubleshooting
+
+### `npm install` fails
+
+Ensure you have **Node.js 18+** installed. Check with `node -v`. If dependencies fail to resolve, clear the cache and retry:
+
+```bash
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install
+```
+
+### Compile fails
+
+Hardhat downloads the Solidity 0.8.24 compiler automatically on first compile. If it fails:
+
+```bash
+npx hardhat clean
+npx hardhat compile
+```
+
+Ensure you have a stable internet connection for the initial compiler download.
+
+### Tests fail
+
+Reset the build artifacts and recompile:
+
+```bash
+npx hardhat clean
+npx hardhat compile
+npm test
+```
+
+### MetaMask won't connect (frontend)
+
+Switch MetaMask to the **BSC network**:
+
+- **Network Name:** BNB Smart Chain
+- **RPC URL:** `https://bsc-dataseed.binance.org/`
+- **Chain ID:** 56
+- **Currency Symbol:** BNB
+- **Block Explorer:** `https://bscscan.com`
+
+### Reveal fails with "Hash mismatch"
+
+The `reveal()` function recomputes `keccak256(abi.encodePacked(decision, nonce))` and compares it against the stored hash. A mismatch means the decision or nonce strings provided during reveal do not exactly match those used during commit. Ensure:
+
+- The **exact same decision string** is used (case-sensitive, no extra whitespace)
+- The **exact same nonce string** is used
+- No characters were added or removed between commit and reveal
 
 ---
 

@@ -44,6 +44,13 @@
         .connected { color: #00ff88; font-weight: 600; }
         .disconnected { color: #ff4444; }
         .info-box { background: #0f1429; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 13px; }
+        .copy-btn {
+            display: inline-block; width: auto; padding: 2px 8px; margin-left: 8px;
+            font-size: 11px; background: #2a3f5f; color: #00d4ff; border: 1px solid #00d4ff;
+            border-radius: 4px; cursor: pointer; vertical-align: middle;
+        }
+        .copy-btn:hover { background: #00d4ff; color: #0a0e27; transform: none; box-shadow: none; }
+        .output-row { display: flex; align-items: center; gap: 8px; }
     </style>
 </head>
 <body>
@@ -66,9 +73,10 @@
             <h2>Commit Decision</h2>
             <input type="text" id="commitDecision" placeholder="Enter your AI decision" />
             <button onclick="generateNonce()">Generate New Nonce</button>
-            <div class="output">Nonce: <span id="nonceDisplay">-</span></div>
-            <div class="output">Hash: <span id="hashDisplay">-</span></div>
+            <div class="output output-row">Nonce: <span id="nonceDisplay">-</span><button class="copy-btn" onclick="copyText('nonceDisplay')">Copy</button></div>
+            <div class="output output-row">Hash: <span id="hashDisplay">-</span><button class="copy-btn" onclick="copyText('hashDisplay')">Copy</button></div>
             <button onclick="commitDecision()">Submit Commitment</button>
+            <div id="commitResult" class="output output-row" style="display:none;">Commit ID: <span id="commitIdDisplay">-</span><button class="copy-btn" onclick="copyText('commitIdDisplay')">Copy</button></div>
         </div>
 
         <div class="section">
@@ -103,7 +111,9 @@
             "function reveal(uint256 _commitId, string calldata _decision, string calldata _nonce) external",
             "function getCommitment(uint256 _commitId) external view returns (bytes32 hash, uint256 timestamp, address committer, bool revealed, string memory decision, string memory nonce)",
             "function verify(uint256 _commitId) external view returns (bool)",
-            "function computeHash(string calldata _decision, string calldata _nonce) external pure returns (bytes32)"
+            "function computeHash(string calldata _decision, string calldata _nonce) external pure returns (bytes32)",
+            "event CommitCreated(uint256 indexed commitId, address indexed committer, bytes32 hash)",
+            "event CommitRevealed(uint256 indexed commitId, string decision, string nonce)"
         ];
 
         let provider, signer, contract, currentNonce = '';
@@ -111,8 +121,11 @@
         async function connectWallet() {
             const contractAddr = document.getElementById('contractAddress').value.trim();
             if (!contractAddr) return logStatus('Please enter contract address', true);
+            if (!ethers.isAddress(contractAddr)) {
+                return logStatus('Invalid contract address format', true);
+            }
 
-            if (!window.ethereum) return logStatus('MetaMask not found', true);
+            if (!window.ethereum) return logStatus('MetaMask not found. Please install MetaMask to continue.', true);
 
             try {
                 await window.ethereum.request({ method: 'eth_requestAccounts' });
@@ -136,7 +149,7 @@
 
                 logStatus(`Connected to ${address.slice(0, 6)}...${address.slice(-4)} on BSC`);
             } catch (error) {
-                logStatus(`Connection error: ${error.message}`, true);
+                logStatus(`Connection error: ${error.message}. Check MetaMask is connected and unlocked.`, true);
             }
         }
 
@@ -172,13 +185,18 @@
 
         async function updateHash() {
             const decision = document.getElementById('commitDecision').value;
-            if (!decision || !currentNonce || !contract) return;
+            if (!decision || !currentNonce) return;
 
             try {
-                const hash = await contract.computeHash(decision, currentNonce);
-                document.getElementById('hashDisplay').textContent = hash;
+                if (contract) {
+                    const hash = await contract.computeHash(decision, currentNonce);
+                    document.getElementById('hashDisplay').textContent = hash;
+                } else {
+                    const hash = ethers.solidityPackedKeccak256(['string', 'string'], [decision, currentNonce]);
+                    document.getElementById('hashDisplay').textContent = hash;
+                }
             } catch (error) {
-                logStatus(`Hash computation error: ${error.message}`, true);
+                // Silently fail; hash will update once contract is connected
             }
         }
 
@@ -196,13 +214,22 @@
                 logStatus(`Transaction sent: ${tx.hash.slice(0, 10)}...`);
 
                 const receipt = await tx.wait();
-                const commitId = receipt.logs[0]?.topics[1];
-                const id = commitId ? parseInt(commitId, 16) : 'check logs';
+                let id = 'unknown';
+                for (const log of receipt.logs) {
+                    try {
+                        const parsed = contract.interface.parseLog({ topics: log.topics, data: log.data });
+                        if (parsed && parsed.name === 'CommitCreated') {
+                            id = parsed.args.commitId.toString();
+                        }
+                    } catch(e) {}
+                }
 
+                document.getElementById('commitIdDisplay').textContent = id;
+                document.getElementById('commitResult').style.display = 'flex';
                 logStatus(`Commitment successful! Commit ID: ${id}`, false, true);
                 logStatus(`Save this: Decision="${decision}", Nonce="${currentNonce}", ID=${id}`, false, true);
             } catch (error) {
-                logStatus(`Commit error: ${error.message}`, true);
+                logStatus(`Commit error: ${error.message}. Verify contract address is correct and you have sufficient BNB.`, true);
             }
         }
 
@@ -219,10 +246,19 @@
                 const tx = await contract.reveal(commitId, decision, nonce);
                 logStatus(`Transaction sent: ${tx.hash.slice(0, 10)}...`);
 
-                await tx.wait();
-                logStatus(`Reveal successful! Commit ID ${commitId} revealed`, false, true);
+                const receipt = await tx.wait();
+                let revealedId = commitId;
+                for (const log of receipt.logs) {
+                    try {
+                        const parsed = contract.interface.parseLog({ topics: log.topics, data: log.data });
+                        if (parsed && parsed.name === 'CommitRevealed') {
+                            revealedId = parsed.args.commitId.toString();
+                        }
+                    } catch(e) {}
+                }
+                logStatus(`Reveal successful! Commit ID ${revealedId} revealed`, false, true);
             } catch (error) {
-                logStatus(`Reveal error: ${error.message}`, true);
+                logStatus(`Reveal error: ${error.message}. Verify contract address is correct and commit ID exists.`, true);
             }
         }
 
@@ -249,7 +285,12 @@
                 document.getElementById('verifyOutput').style.display = 'block';
                 logStatus(`Verification complete: ${isValid ? 'VALID' : 'INVALID'}`, !isValid, isValid);
             } catch (error) {
-                logStatus(`Verify error: ${error.message}`, true);
+                const msg = error.message || '';
+                if (msg.includes('revert') || msg.includes('not revealed') || msg.includes('NotRevealed')) {
+                    logStatus('Verify error: Commitment not yet revealed. Reveal the decision before verifying.', true);
+                } else {
+                    logStatus(`Verify error: ${msg}. Verify contract address is correct and commit ID exists.`, true);
+                }
             }
         }
 
@@ -258,6 +299,16 @@
             const timestamp = new Date().toLocaleTimeString();
             const className = isError ? 'error' : isSuccess ? 'success' : '';
             log.innerHTML = `<div class="status-item ${className}">[${timestamp}] ${message}</div>` + log.innerHTML;
+        }
+
+        function copyText(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            if (!text || text === '-') return;
+            navigator.clipboard.writeText(text).then(() => {
+                logStatus('Copied to clipboard');
+            }).catch(() => {
+                logStatus('Copy failed - use manual selection', true);
+            });
         }
 
         document.getElementById('commitDecision').addEventListener('input', updateHash);

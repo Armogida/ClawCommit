@@ -1,4 +1,4 @@
-import { ethers, network } from "hardhat";
+import { ethers, network, run } from "hardhat";
 import { randomBytes } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -13,6 +13,15 @@ async function main(): Promise<void> {
   console.log("Network:", network.name);
   const chainId = (await ethers.provider.getNetwork()).chainId;
   console.log("Chain ID:", chainId.toString());
+
+  // Balance check
+  const [deployer] = await ethers.getSigners();
+  const balance = await ethers.provider.getBalance(deployer.address);
+  console.log("Deployer:", deployer.address);
+  console.log("Balance:", ethers.formatEther(balance), "BNB");
+  if (balance < ethers.parseEther("0.01")) {
+    console.warn("WARNING: Balance is low. Deployment may fail due to insufficient gas.");
+  }
 
   // Step 1: Deploy
   console.log("\n--- Step 1: Deploy Contract ---");
@@ -127,6 +136,19 @@ async function main(): Promise<void> {
     `Hash: ${hash}\n`;
 
   fs.writeFileSync(path.join(proofDir, "PROOF_SUMMARY.txt"), summary);
+
+  // Step 5: BscScan Verification
+  if (network.name !== "hardhat" && network.name !== "localhost") {
+    console.log("\n--- Step 5: BscScan Verification ---");
+    try {
+      console.log("Waiting 10s for BscScan indexing...");
+      await new Promise(r => setTimeout(r, 10000));
+      await run("verify:verify", { address: contractAddress, constructorArguments: [] });
+      console.log("Contract verified on BscScan.");
+    } catch (e: any) {
+      console.log("BscScan verification skipped:", e.message);
+    }
+  }
 
   console.log("\n=== Proof artifacts written to deployment-proof/ ===");
   console.log("Files:");

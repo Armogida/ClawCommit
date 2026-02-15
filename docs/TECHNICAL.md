@@ -253,7 +253,98 @@ export default config;
 
 ---
 
-## 8. Environment Variables Required
+## 8. TypeScript Configuration
+
+ClawCommit uses TypeScript end-to-end for scripts, tests, and configuration. Three components work together to enable this: `tsconfig.json`, `ts-node`, and TypeChain.
+
+### tsconfig.json
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist",
+    "declaration": true,
+    "sourceMap": true
+  },
+  "include": [
+    "./scripts",
+    "./test",
+    "./backend",
+    "./hardhat.config.ts"
+  ],
+  "files": ["./hardhat.config.ts"]
+}
+```
+
+| Setting | Purpose |
+|---------|---------|
+| `target: "ES2020"` | Targets ES2020 for `BigInt` support and modern JS features used by ethers.js v6 |
+| `module: "commonjs"` | Uses CommonJS modules for Node.js and Hardhat compatibility |
+| `strict: true` | Enables all strict type-checking options for safer code |
+| `esModuleInterop: true` | Allows default imports from CommonJS modules (e.g., `import dotenv from "dotenv"`) |
+| `resolveJsonModule: true` | Enables importing `.json` files as modules with type inference |
+| `outDir: "./dist"` | Compiled JavaScript output directory (not used at runtime -- see ts-node below) |
+| `declaration: true` | Generates `.d.ts` type declaration files alongside compiled output |
+| `sourceMap: true` | Generates source maps for debugging TypeScript in stack traces |
+
+The `include` array tells TypeScript which directories to type-check: `scripts/`, `test/`, `backend/`, and the Hardhat config file. The `files` entry ensures `hardhat.config.ts` is always included as a root file.
+
+### ts-node: Running TypeScript Directly
+
+Hardhat uses `ts-node` (listed in `devDependencies`) to execute `.ts` files directly without a separate compile step. When you run:
+
+```bash
+npx hardhat run scripts/deploy.ts
+npx hardhat test
+```
+
+Hardhat detects `hardhat.config.ts` and automatically registers `ts-node`, which transpiles TypeScript to JavaScript in memory at runtime. This means:
+
+- No `tsc` build step is needed before running scripts or tests
+- Changes to `.ts` files take effect immediately on the next run
+- The `outDir: "./dist"` setting in `tsconfig.json` is not used during development -- `ts-node` handles everything in memory
+
+### TypeChain: Typed Contract Bindings
+
+TypeChain generates fully typed TypeScript bindings for smart contracts. It is configured via `@typechain/hardhat` and `@typechain/ethers-v6` in `devDependencies`.
+
+When you run `npx hardhat compile`, TypeChain automatically generates typed bindings in the `typechain-types/` directory:
+
+```
+typechain-types/
+├── ClawCommit.ts           — Typed contract interface
+├── factories/
+│   └── ClawCommit__factory.ts  — Typed deployment factory
+├── common.ts               — Shared type utilities
+└── index.ts                — Re-exports all types
+```
+
+These bindings provide:
+
+- **Type-safe contract interactions** -- Method parameters and return types are known at compile time
+- **Autocompletion in editors** -- IDEs can suggest available contract methods and their signatures
+- **Compile-time error detection** -- Passing wrong argument types to contract calls is caught before runtime
+
+Example usage in tests and scripts:
+
+```typescript
+import { ClawCommit } from "../typechain-types";
+
+const contract: ClawCommit = await ethers.deployContract("ClawCommit");
+const hash: string = await contract.computeHash("BUY_BNB_AT_580", "nonce123");
+// TypeScript knows computeHash takes two strings and returns a string (bytes32)
+```
+
+TypeChain bindings are regenerated automatically on every `npx hardhat compile`. They should not be committed to version control (they are excluded by `.gitignore`).
+
+---
+
+## 9. Environment Variables Required
 
 Create a `.env` file from the template:
 
@@ -273,7 +364,7 @@ BSCSCAN_API_KEY=<your-bscscan-api-key>
 
 ---
 
-## 9. Deployment Instructions
+## 10. Deployment Instructions
 
 ### Compile
 
@@ -311,7 +402,7 @@ Record the contract address in `bsc.address`.
 
 ---
 
-## 10. How to Verify Contract on BscScan
+## 11. How to Verify Contract on BscScan
 
 ```bash
 npx hardhat verify --network bscMainnet <CONTRACT_ADDRESS>
@@ -321,7 +412,7 @@ If the contract has no constructor arguments, this is all that's needed. BscScan
 
 ---
 
-## 11. Example CLI Usage
+## 12. Example CLI Usage
 
 ### Commit a Decision
 
@@ -384,7 +475,7 @@ Replay Verified: true
 
 ---
 
-## 12. Gas Considerations
+## 13. Gas Considerations
 
 | Function | Gas Used | Type | Cost at 5 gwei |
 |----------|----------|------|-----------------|
@@ -404,7 +495,7 @@ REPORT_GAS=true npx hardhat test
 
 ---
 
-## 13. Testing Instructions
+## 14. Testing Instructions
 
 ### Run Full Test Suite
 

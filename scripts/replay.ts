@@ -136,6 +136,12 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(error);
+    console.error("Error:", error.message || error);
+    if (error.message?.includes("insufficient funds")) {
+      console.error("Hint: Deployer account needs BNB for gas fees");
+    }
+    if (error.message?.includes("could not detect network")) {
+      console.error("Hint: Check BSC_RPC_URL in .env");
+    }
     process.exit(1);
   });

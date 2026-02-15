@@ -22,14 +22,14 @@ const config: HardhatUserConfig = {
   },
   networks: {
     bscMainnet: {
-      url: process.env.BSC_RPC_URL || "https://bsc-dataseed.binance.org/",
+      url: (process.env.BSC_RPC_URL || "").trim() || "https://bsc-dataseed.binance.org/",
       chainId: 56,
       accounts: process.env.DEPLOYER_PRIVATE_KEY
         ? [process.env.DEPLOYER_PRIVATE_KEY]
         : [],
     },
     bscTestnet: {
-      url: "https://data-seed-prebsc-1-s1.binance.org:8545/",
+      url: (process.env.BSC_TESTNET_RPC_URL || "").trim() || "https://data-seed-prebsc-1-s1.binance.org:8545/",
       chainId: 97,
       accounts: process.env.DEPLOYER_PRIVATE_KEY
         ? [process.env.DEPLOYER_PRIVATE_KEY]
