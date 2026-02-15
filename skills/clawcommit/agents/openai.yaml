@@ -1,0 +1,4 @@
+interface:
+  display_name: "ClawCommit"
+  short_description: "Integrate onchain AI audit logs"
+  default_prompt: "Integrate ClawCommit commit-reveal logging in this codebase, wire CI automation, and validate replay verification artifacts."

@@ -41,6 +41,20 @@ npx hardhat compile
 npm test
 ```
 
+## Codex Skill (Public)
+
+This repository includes a reusable Codex skill at `skills/clawcommit`.
+
+Install it with the system skill installer:
+
+```bash
+python "$CODEX_HOME/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
+  --repo Armogida/ClawCommit \
+  --path skills/clawcommit
+```
+
+After installing a skill: restart Codex to load it.
+
 ## Network Config
 
 Mainnet alias is available as `bsc` (same endpoint/chain as `bscMainnet`).
