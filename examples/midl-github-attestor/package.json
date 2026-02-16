@@ -1,0 +1,25 @@
+{
+  "name": "midl-github-attestor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GitHub-native ClawCommit attestor UI using Midl RPC",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clawcommit/sdk": "file:../../integrations/sdk",
+    "ethers": "^6.13.4",
+    "next": "^14.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.4.0"
+  }
+}
