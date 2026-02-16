@@ -17,6 +17,7 @@
     "replay": "ts-node scripts/replay.ts",
     "decision:links": "node scripts/integration/post-cycle-links.js",
     "bas:build": "ts-node scripts/integration/buildBasAttestation.ts",
+    "bas:submit": "ts-node scripts/integration/submitBasAttestation.ts",
     "pipeline": "HARDHAT_NETWORK=bscTestnet ts-node backend/aiPipeline.ts",
     "batch:build": "ts-node scripts/batch/build.ts",
     "batch:recompute": "ts-node scripts/batch/recomputeRoot.ts",

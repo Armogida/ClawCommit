@@ -341,6 +341,17 @@ Output includes:
 
 See: `integrations/bas/README.md`
 
+Direct submit (for EAS-compatible BAS contracts):
+
+```bash
+npm run bas:submit -- \
+  --payload deployment-proof/bas-attestation.json \
+  --bas-contract <BAS_CONTRACT_ADDRESS> \
+  --schema-uid <BAS_SCHEMA_UID> \
+  --network bscTestnet \
+  --out deployment-proof/bas-submit-result.json
+```
+
 ### 4. Replay Validator (Standalone)
 
 ```bash

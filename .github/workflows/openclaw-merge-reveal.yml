@@ -166,6 +166,44 @@ jobs:
 
           echo "artifact_file=$REVEAL_FILE" >> "$GITHUB_OUTPUT"
 
+      - name: Build BAS payload artifact (optional)
+        if: ${{ steps.openclaw_verify.outputs.verified == 'true' && secrets.BAS_SCHEMA_UID != '' }}
+        id: bas_payload
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          BAS_FILE=".clawcommit/openclaw/pr-${PR_NUMBER}-bas-attestation.json"
+          npm run bas:build -- \
+            --contract "${{ steps.artifact_meta.outputs.contract }}" \
+            --commit-id "${{ steps.artifact_meta.outputs.commit_id }}" \
+            --reveal-tx "${{ steps.openclaw_reveal.outputs.tx-hash }}" \
+            --network bscTestnet \
+            --rpc "${{ steps.rpc.outputs.rpc_url }}" \
+            --schema-uid "${{ secrets.BAS_SCHEMA_UID }}" \
+            --metadata-uri "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --out "$BAS_FILE"
+          echo "bas_file=$BAS_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Submit BAS attestation onchain (optional)
+        if: ${{ steps.bas_payload.outputs.bas_file != '' && secrets.BAS_AUTO_SUBMIT == 'true' && secrets.BAS_CONTRACT_ADDRESS != '' }}
+        id: bas_submit
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          BAS_RESULT_FILE=".clawcommit/openclaw/pr-${PR_NUMBER}-bas-submit.json"
+          npm run bas:submit -- \
+            --payload "${{ steps.bas_payload.outputs.bas_file }}" \
+            --bas-contract "${{ secrets.BAS_CONTRACT_ADDRESS }}" \
+            --schema-uid "${{ secrets.BAS_SCHEMA_UID }}" \
+            --network bscTestnet \
+            --rpc "${{ steps.rpc.outputs.rpc_url }}" \
+            --private-key "${{ secrets.BAS_ATTESTER_PRIVATE_KEY }}" \
+            --allow-mainnet-writes false \
+            --out "$BAS_RESULT_FILE"
+          echo "bas_result_file=$BAS_RESULT_FILE" >> "$GITHUB_OUTPUT"
+
       - name: Post redacted merge reveal comment with explorer links
         env:
           GH_TOKEN: ${{ github.token }}
@@ -186,6 +224,16 @@ jobs:
             .clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-revealed.json
             .clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-revealed.md
           if-no-files-found: error
+
+      - name: Upload BAS artifacts (optional)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: clawcommit-openclaw-pr-${{ github.event.pull_request.number }}-bas
+          path: |
+            .clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-bas-attestation.json
+            .clawcommit/openclaw/pr-${{ github.event.pull_request.number }}-bas-submit.json
+          if-no-files-found: ignore
 
       - name: Fail if replay verification failed
         shell: bash

@@ -8,10 +8,11 @@ What this layer does:
 - validates a reveal transaction hash against contract and commit ID
 - encodes deterministic BAS claim bytes
 - emits a submission-ready attestation request payload (`data` + metadata)
+- supports direct BAS submission for EAS-compatible BAS contracts
 
 What this layer does not do:
 - it does not hardcode BAS contract ABIs or BAS network addresses
-- it does not submit the attestation transaction directly
+- it does not infer schema UIDs or BAS contract addresses automatically
 
 Why:
 - BAS contract interfaces can vary across environments.
@@ -58,9 +59,46 @@ The output includes:
 - `claim` (human-readable structured fields)
 - `attestationRequest` (BAS-ready request object)
 
+## Direct Submit (EAS-Compatible BAS)
+
+If your BAS deployment exposes an EAS-compatible `attest(...)` method, submit directly:
+
+```bash
+npm run bas:submit -- \
+  --payload deployment-proof/bas-attestation.json \
+  --bas-contract <BAS_CONTRACT_ADDRESS> \
+  --schema-uid <BAS_SCHEMA_UID> \
+  --network bscTestnet \
+  --allow-mainnet-writes false \
+  --out deployment-proof/bas-submit-result.json
+```
+
+Optional:
+- `--abi-mode eas|flat` (default `eas`)
+- `--private-key <HEX_KEY>` (otherwise `BAS_ATTESTER_PRIVATE_KEY` or `DEPLOYER_PRIVATE_KEY`)
+- `--dry-run` to print call payload without sending a transaction
+
+Mainnet safety:
+- mainnet writes are blocked by default
+- pass `--allow-mainnet-writes true` explicitly to submit on mainnet
+
+## GitHub Actions Auto Artifact / Submit
+
+`openclaw-merge-reveal.yml` includes optional BAS steps:
+- auto-build BAS payload artifact after successful reveal + verify
+- optional on-chain BAS submit when explicitly enabled
+
+Required secrets for payload generation:
+- `BAS_SCHEMA_UID`
+
+Additional secrets for auto-submit:
+- `BAS_AUTO_SUBMIT` (must be `"true"`)
+- `BAS_CONTRACT_ADDRESS`
+- `BAS_ATTESTER_PRIVATE_KEY`
+
 ## Suggested BAS Submission Flow
 
 1. Register BAS schema for `AI_DECISION_VERIFIED_V1`.
 2. Generate payload with `npm run bas:build`.
-3. Submit `attestationRequest` using your BAS SDK/contract client.
+3. Submit with `npm run bas:submit` or your BAS SDK/client.
 4. Store BAS attestation UID next to ClawCommit artifacts.

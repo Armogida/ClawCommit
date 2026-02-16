@@ -216,6 +216,7 @@ BAS schema-based claims such as `AI_DECISION_VERIFIED`.
 - Deterministic claim encoding tied to `commitId`, commitment hash, and reveal tx hash
 - On-chain cross-check of `getCommitment` + `verifyReplay` before payload generation
 - BAS-ready `attestationRequest.data` output without hardcoding BAS contract ABIs
+- Optional direct submitter for EAS-compatible BAS contracts
 
 **Quick Start**:
 ```bash

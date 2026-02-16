@@ -276,6 +276,22 @@ Output includes:
 - structured claim payload
 - BAS-ready `attestationRequest.data`
 
+Direct BAS submission:
+
+```bash
+npm run bas:submit -- \
+  --payload deployment-proof/bas-attestation.json \
+  --bas-contract <BAS_CONTRACT_ADDRESS> \
+  --schema-uid <BAS_SCHEMA_UID> \
+  --network bscTestnet \
+  --out deployment-proof/bas-submit-result.json
+```
+
+Submission expects EAS-compatible BAS contracts and supports:
+- `--abi-mode eas` (nested EAS request struct, default)
+- `--abi-mode flat` (flat request struct variant)
+- explicit mainnet guard via `--allow-mainnet-writes true`
+
 ## 9. Merkle Batching (Wave 2)
 
 Wave 2 keeps Wave 1 root commitments and adds multi-leaf reveal writes in one transaction.
