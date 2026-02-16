@@ -12,6 +12,9 @@ Until now.
 
 ClawCommit turns AI decisions into cryptographic commitments.
 
+Support our project with an upvote on
+https://dorahacks.io/buidl/39543
+
 It implements a deterministic commit-reveal protocol on BNB Chain:
 
 1. The agent computes:
