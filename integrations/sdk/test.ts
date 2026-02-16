@@ -294,6 +294,13 @@ async function testConstructorValidation() {
     rpcUrl: "http://127.0.0.1:8545",
   });
   console.log("Constructor accepts valid address:", client.getContractAddress());
+
+  const hashLocator = "0x" + "11".repeat(32);
+  const hashClient = new ClawCommit({
+    contractAddress: hashLocator,
+    rpcUrl: "http://127.0.0.1:8545",
+  });
+  console.log("Constructor accepts 32-byte hash locator:", hashClient.getContractAddress());
 }
 
 async function testBigIntSafety() {

@@ -87,7 +87,7 @@ describe("Batch Script Hardening", function () {
         "--batch-id",
         "1",
       ])
-    ).to.throw("--contract must be a valid EVM address");
+    ).to.throw("--contract must be a valid EVM address or 32-byte hex value");
   });
 
   it("replayBatch uses canonical manifest hashing", async function () {

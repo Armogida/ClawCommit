@@ -41,6 +41,14 @@ async function testCommitIdParsing() {
   assert.throws(() => action.parseCommitId("abc", true), /non-negative integer/);
 }
 
+async function testAddressValidation() {
+  const validAddress = "0x0000000000000000000000000000000000000001";
+  const validHashLocator = "0x" + "22".repeat(32);
+  assert.strictEqual(action.requireAddress(validAddress), validAddress);
+  assert.strictEqual(action.requireAddress(validHashLocator), validHashLocator);
+  assert.throws(() => action.requireAddress("0x1234"), /valid EVM address or 32-byte hex value/);
+}
+
 async function testMainnetGuard() {
   await assert.rejects(
     async () => {
@@ -146,6 +154,7 @@ async function testVerifyRedaction() {
 async function main() {
   await testBooleanParsing();
   await testCommitIdParsing();
+  await testAddressValidation();
   await testMainnetGuard();
   await testCommitRedaction();
   await testVerifyRedaction();

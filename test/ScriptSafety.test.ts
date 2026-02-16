@@ -37,12 +37,13 @@ describe("Script Safety Helpers", function () {
     expect(parsed.toString()).to.equal("1234567890123456789012345678901234567890");
   });
 
-  it("validates addresses", async function () {
+  it("validates addresses or 32-byte hashes", async function () {
     expect(() =>
       requireAddress("0x0000000000000000000000000000000000000001", "--contract")
     ).to.not.throw();
+    expect(() => requireAddress(`0x${"11".repeat(32)}`, "--contract")).to.not.throw();
     expect(() => requireAddress("0x...", "--contract")).to.throw(
-      "--contract must be a valid EVM address"
+      "--contract must be a valid EVM address or 32-byte hex value"
     );
   });
 });

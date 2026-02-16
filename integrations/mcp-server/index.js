@@ -31,6 +31,7 @@ const {
 
 const BSC_MAINNET_CHAIN_ID = 56n;
 const OPENCLAW_PROMPT_TEMPLATE_VERSION = "openclaw-prompt-v1";
+const HEX_32_REGEX = /^0x[0-9a-fA-F]{64}$/;
 
 const ABI = [
   "function commitDecision(bytes32 _hash) external returns (uint256)",
@@ -102,10 +103,11 @@ const GeminiGenerationConfigSchema = z.object({
 });
 
 function requireAddress(address) {
-  if (!ethers.isAddress(address)) {
-    throw new Error(`Invalid contract address: ${address}`);
+  const normalized = String(address || "").trim();
+  if (!ethers.isAddress(normalized) && !HEX_32_REGEX.test(normalized)) {
+    throw new Error(`Invalid contract address or 32-byte hash: ${address}`);
   }
-  return address;
+  return normalized;
 }
 
 function normalizeCommitId(commitId) {

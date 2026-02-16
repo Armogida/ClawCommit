@@ -19,6 +19,8 @@ function testAddressValidation() {
     requireAddress("0x0000000000000000000000000000000000000001"),
     "0x0000000000000000000000000000000000000001"
   );
+  const hashLocator = "0x" + "11".repeat(32);
+  assert.strictEqual(requireAddress(hashLocator), hashLocator);
   assert.throws(() => requireAddress("0x..."), /Invalid contract address/);
 }
 

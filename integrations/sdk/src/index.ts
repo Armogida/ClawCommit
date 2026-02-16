@@ -142,6 +142,7 @@ const EXPLORER_URLS = {
   mainnet: "https://bscscan.com",
   testnet: "https://testnet.bscscan.com",
 };
+const HEX_32_REGEX = /^0x[0-9a-fA-F]{64}$/;
 
 export const OPENCLAW_PROMPT_TEMPLATE_VERSION = "openclaw-prompt-v1";
 export const GEMINI_PROMPT_TEMPLATE_VERSION = "gemini-context-v1";
@@ -467,13 +468,15 @@ export class ClawCommit {
   private allowMainnetWrites: boolean;
 
   constructor(config: ClawCommitConfig) {
-    if (isPlaceholderAddress(config.contractAddress)) {
+    const normalizedContractAddress = config.contractAddress.trim();
+
+    if (isPlaceholderAddress(normalizedContractAddress)) {
       throw new Error(
         "contractAddress is required and cannot be a placeholder value (e.g. 0x...)"
       );
     }
-    if (!ethers.isAddress(config.contractAddress)) {
-      throw new Error(`Invalid contract address: ${config.contractAddress}`);
+    if (!ethers.isAddress(normalizedContractAddress) && !HEX_32_REGEX.test(normalizedContractAddress)) {
+      throw new Error(`Invalid contract address or 32-byte hash: ${config.contractAddress}`);
     }
 
     const rpcUrl = config.rpcUrl || DEFAULT_RPC_URLS.testnet;
@@ -486,9 +489,17 @@ export class ClawCommit {
 
     if (config.privateKey) {
       this.signer = new ethers.Wallet(config.privateKey, this.provider);
-      this.contract = new ethers.Contract(config.contractAddress, CLAWCOMMIT_ABI, this.signer);
+      this.contract = new ethers.Contract(
+        normalizedContractAddress,
+        CLAWCOMMIT_ABI,
+        this.signer
+      );
     } else {
-      this.contract = new ethers.Contract(config.contractAddress, CLAWCOMMIT_ABI, this.provider);
+      this.contract = new ethers.Contract(
+        normalizedContractAddress,
+        CLAWCOMMIT_ABI,
+        this.provider
+      );
     }
   }
 

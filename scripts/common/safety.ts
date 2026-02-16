@@ -31,10 +31,11 @@ export function parseBooleanFlag(args: string[], flag: string): boolean {
 }
 
 export function requireAddress(value: string, label: string): string {
-  if (!isAddress(value)) {
-    throw new Error(`${label} must be a valid EVM address`);
+  const normalized = value.trim();
+  if (!isAddress(normalized) && !HEX_32_REGEX.test(normalized)) {
+    throw new Error(`${label} must be a valid EVM address or 32-byte hex value`);
   }
-  return value;
+  return normalized;
 }
 
 export function parseNonNegativeBigInt(value: string, label: string): bigint {

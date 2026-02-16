@@ -2,6 +2,7 @@ const core = require("@actions/core");
 const { ethers } = require("ethers");
 
 const BSC_MAINNET_CHAIN_ID = 56n;
+const HEX_32_REGEX = /^0x[0-9a-fA-F]{64}$/;
 
 const CLAWCOMMIT_ABI = [
   "function commitDecision(bytes32 _hash) external returns (uint256 commitId)",
@@ -57,10 +58,13 @@ function parseCommitId(input, required) {
 }
 
 function requireAddress(address) {
-  if (!ethers.isAddress(address)) {
-    throw new Error(`contract-address must be a valid EVM address. Received: ${address}`);
+  const normalized = String(address || "").trim();
+  if (!ethers.isAddress(normalized) && !HEX_32_REGEX.test(normalized)) {
+    throw new Error(
+      `contract-address must be a valid EVM address or 32-byte hex value. Received: ${address}`
+    );
   }
-  return address;
+  return normalized;
 }
 
 async function assertWriteNetworkSafety(provider, allowMainnetWrites) {
