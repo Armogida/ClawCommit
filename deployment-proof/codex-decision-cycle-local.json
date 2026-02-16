@@ -1,0 +1,11 @@
+{
+  "network": "localhost",
+  "contract": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "deployTx": "",
+  "commitId": "0",
+  "commitTx": "0x428eefe23616691a68a4d9453f5918d7783b4640f90c18cbd024d27404684894",
+  "revealTx": "0xb54b26d5ca814a21091ba8928512bed2729ec1d0ee2ddfce915d669750144e57",
+  "nonce": "0xe9467b9c580f389aabdf8015999ffe6950fe4bf6583fcab6a75c8d77cae6d314",
+  "onchainVerify": "true",
+  "replay": "verified"
+}

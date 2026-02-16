@@ -1,10 +1,10 @@
 $ npx hardhat node  # started in background
-Hardhat node PID: 62320
+Hardhat node PID: 58831
 $ npx hardhat run scripts/batch/deployBatch.ts --network localhost
 Deploying ClawCommitBatch...
 Network: localhost
 ClawCommitBatch deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-Deployment Tx: 0x8d37daa6498843d2a01cb51469137da16442cfd72a4fcc70b2565385cdf39be6
+Deployment Tx: 0x7d565137cee0b7a58dfa34c59e9e823c88607d7c802f2fb30281e24bd4b9e54a
 Chain ID: 31337
 
 Resolved contract address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
@@ -15,6 +15,8 @@ Input: data/decisions-batch-001.ndjson
 Output: artifacts/batches/batch-001.manifest.json
 Leaf count: 3
 Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
+Canonical manifest hash: 0x5d9aa1bfee04a299c498ffbd5de9cefa8ff222f9b8d09ef96346f01e10799b45
+Canonical JSON bytes: 790
 
 $ npx ts-node scripts/batch/generateProof.ts --manifest artifacts/batches/batch-001.manifest.json --leaf-index 1 --out artifacts/batches/batch-001-leaf-1.proof.json
 Merkle proof generated.
@@ -22,14 +24,16 @@ Manifest: artifacts/batches/batch-001.manifest.json
 Leaf index: 1
 Output: artifacts/batches/batch-001-leaf-1.proof.json
 Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
+Sensitive payload is only written to file. Stdout redaction guard is active.
 
 $ HARDHAT_NETWORK=localhost npx ts-node scripts/batch/commitBatch.ts --contract 0x5FbDB2315678afecb367f032d93F642f64180aa3 --manifest artifacts/batches/batch-001.manifest.json
 Batch committed.
 Manifest: artifacts/batches/batch-001.manifest.json
 Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
 Leaf count: 3
-Manifest hash: 0xc14a71a924b8dd2aa7bb47b24e2f34d0d748e202a8871ad5714b8037d1aea571
-Commit Tx: 0x8424dd3081a2426ff409da105a441aa50d6d80c3dc45d3b46ce0012f061ec238
+Manifest hash: 0x5d9aa1bfee04a299c498ffbd5de9cefa8ff222f9b8d09ef96346f01e10799b45
+Sensitive leaf payload logging disabled.
+Commit Tx: 0xcce4aaa449ecb5e58fbff6b9d83e1d53af72d7d6a8a5917b74721a7dbdd44474
 Batch ID: 0
 
 $ HARDHAT_NETWORK=localhost npx ts-node scripts/batch/revealLeaf.ts --contract 0x5FbDB2315678afecb367f032d93F642f64180aa3 --batch-id 0 --leaf-index 1 --manifest artifacts/batches/batch-001.manifest.json
@@ -37,11 +41,13 @@ $ HARDHAT_NETWORK=localhost npx ts-node scripts/batch/revealLeaf.ts --contract 0
 Revealing batch leaf...
 Batch ID:    0
 Leaf Index:  1
-Prompt:      Should staking rewards be rebalanced this epoch?
-Output:      APPROVE_REWARD_SHIFT
-Nonce:       batch-nonce-0002
+Prompt:      [REDACTED]
+Output:      [REDACTED]
+Nonce:       [REDACTED]
+Sensitive fields are redacted. Use --log-sensitive true in trusted environments.
+Manifest Hash: 0x5d9aa1bfee04a299c498ffbd5de9cefa8ff222f9b8d09ef96346f01e10799b45
 
-Reveal Tx:   0x26fc5ed1e92ed31d7ab46d3567fa33430fb716b26669acf04b4de30eaa38a628
+Reveal Tx:   0xb8454b3a7acb11a4d676e5224bdd3354799725a2c144eb1e318ac9632fd58bcd
 
 ✓ Leaf revealed successfully
 Batch ID:    0
@@ -57,6 +63,7 @@ $ BSC_RPC_URL=http://127.0.0.1:8545 npx ts-node scripts/batch/replayBatch.ts --m
    Model: clawcommit-v2.0
    ✓ All 3 leaf hashes verified
    ✓ Merkle root verified: 0x27b1622177b386d3...
+   ✓ Canonical manifest hash: 0x5d9aa1bfee04a299c498ffbd5de9cefa8ff222f9b8d09ef96346f01e10799b45
 
 🔗 On-Chain Verification
    Contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
@@ -69,7 +76,7 @@ $ BSC_RPC_URL=http://127.0.0.1:8545 npx ts-node scripts/batch/replayBatch.ts --m
    Batch ID: 0
    Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
    Committer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   Timestamp: 2026-02-15T08:07:52.000Z
+   Timestamp: 2026-02-16T02:25:51.000Z
 
 $ npx ts-node scripts/batch/replayBatch.ts --manifest artifacts/batches/batch-001.manifest.json --local
 
@@ -79,9 +86,10 @@ $ npx ts-node scripts/batch/replayBatch.ts --manifest artifacts/batches/batch-00
    Model: clawcommit-v2.0
    ✓ All 3 leaf hashes verified
    ✓ Merkle root verified: 0x27b1622177b386d3...
+   ✓ Canonical manifest hash: 0x5d9aa1bfee04a299c498ffbd5de9cefa8ff222f9b8d09ef96346f01e10799b45
 
 ✓ LOCAL REPLAY VERIFIED
    Root: 0x27b1622177b386d360bd7a88c7f1149a6a954d63cf1f6e8baa254aaa41799061
 
 Transcript saved to deployment-proof/batch-demo-transcript.txt
-$ kill 62320
+$ kill 58831

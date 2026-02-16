@@ -1,5 +1,5 @@
-0x5FbDB2315678afecb367f032d93F642f64180aa3
-network=hardhat
-chain_id=31337
-explorer=https://bscscan.com/address/0x5FbDB2315678afecb367f032d93F642f64180aa3
-generated_at=2026-02-15T01:56:24.110Z
+0x586766ce492f55f351f40d66ac350e5B7013d7F0
+network=bsc
+chain_id=56
+explorer=https://bscscan.com/address/0x586766ce492f55f351f40d66ac350e5B7013d7F0
+generated_at=2026-02-16T03:02:16.922Z
