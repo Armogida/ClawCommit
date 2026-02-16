@@ -3,6 +3,8 @@ name: OpenClaw Merge Attestation (ClawCommit)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "README.md"
 
 permissions:
   contents: write
@@ -31,11 +33,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Guard mainnet writes
+      - name: Resolve mainnet attestation mode
+        id: attest_mode
         run: |
+          enabled=true
+          missing=""
+
           if [ "$ALLOW_MAINNET_WRITES" != "true" ]; then
-            echo "ALLOW_MAINNET_WRITES != true; skipping on-chain writes."
-            exit 0
+            enabled=false
+            missing="ALLOW_MAINNET_WRITES=true"
+          fi
+
+          if [ -z "$RPC_URL" ]; then
+            enabled=false
+            missing="$missing BSC_MAINNET_RPC_URL"
+          fi
+
+          if [ -z "$CONTRACT" ]; then
+            enabled=false
+            missing="$missing CLAWCOMMIT_CONTRACT_MAINNET"
+          fi
+
+          if [ -z "$DEPLOYER_PRIVATE_KEY" ]; then
+            enabled=false
+            missing="$missing DEPLOYER_PRIVATE_KEY_MAINNET"
+          fi
+
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+          if [ "$enabled" != "true" ]; then
+            echo "Mainnet attestation disabled. Missing/disabled:$missing"
           fi
 
       - name: Build standardized OpenClaw merge log
@@ -77,6 +104,7 @@ jobs:
             --out ".clawcommit/audit/${GITHUB_SHA}-decision.json"
 
       - name: Run decision cycle (commit + reveal + replay on mainnet)
+        if: ${{ steps.attest_mode.outputs.enabled == 'true' }}
         run: |
           npm run openclaw:attest -- \
             --repo "$GITHUB_WORKSPACE" \
@@ -92,10 +120,8 @@ jobs:
             --links-include-prompt
 
       - name: Commit audit report to repo
+        if: ${{ steps.attest_mode.outputs.enabled == 'true' }}
         run: |
-          if [ "$ALLOW_MAINNET_WRITES" != "true" ]; then
-            exit 0
-          fi
           git config user.name "clawcommit-bot"
           git config user.email "clawcommit-bot@users.noreply.github.com"
           git add \
