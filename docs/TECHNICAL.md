@@ -230,7 +230,53 @@ auditable without changing the deployed contract API.
 Replay for Gemini verifies commit/reveal integrity plus envelope metadata integrity.
 It does not require deterministic model token replay.
 
-## 8. Merkle Batching (Wave 2)
+## 8. BAS Compatibility Layer
+
+ClawCommit supports BAS-compatible structured attestations as an additive layer.
+
+Core principle:
+- ClawCommit remains the source of truth for commitment integrity.
+- BAS consumes a deterministic claim payload derived from verified commitment state.
+
+Builder command:
+
+```bash
+npm run bas:build -- \
+  --contract <CLAWCOMMIT_ADDRESS> \
+  --commit-id <COMMIT_ID> \
+  --reveal-tx <REVEAL_TX_HASH> \
+  --network bscTestnet \
+  --schema-uid <BAS_SCHEMA_UID> \
+  --out deployment-proof/bas-attestation.json
+```
+
+Canonical BAS-compatible claim schema name:
+- `AI_DECISION_VERIFIED_V1`
+
+Canonical encoded fields:
+1. `bytes32 schemaHash`
+2. `address clawContract`
+3. `uint256 commitId`
+4. `bytes32 commitmentHash`
+5. `bytes32 revealTxHash`
+6. `string modelVersion`
+7. `bool replayVerified`
+8. `uint64 verifiedAt`
+9. `address verifier`
+10. `string metadataURI`
+
+The builder validates:
+- reveal tx success and contract target,
+- decoded `commitId` in reveal calldata,
+- `getCommitment(commitId).revealed == true`,
+- `verifyReplay(commitId)`.
+
+Output includes:
+- `claimDigest = keccak256(encodedClaimData)`
+- structured claim payload
+- BAS-ready `attestationRequest.data`
+
+## 9. Merkle Batching (Wave 2)
 
 Wave 2 keeps Wave 1 root commitments and adds multi-leaf reveal writes in one transaction.
 

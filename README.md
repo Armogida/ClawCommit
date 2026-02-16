@@ -77,6 +77,7 @@ ClawCommit V2 proves:
 - the AI decision can be replayed offchain,
 - the recomputed hash matches the onchain commit,
 - reveal integrity is cryptographically sound.
+- BAS-compatible structured attestation payloads can be generated from verified commitments.
 
 This project upgrades commit-reveal into a deterministic verification primitive suitable for infra-grade audit trails.
 
@@ -310,6 +311,32 @@ npm run openclaw:attest -- \
   --links-out .clawcommit/openclaw-cycle.md \
   --links-include-prompt
 ```
+
+## BNB Attestation Service (BAS) Compatibility
+
+ClawCommit and BAS are complementary:
+- ClawCommit is the commitment/reveal integrity primitive.
+- BAS provides structured, schema-based attestations referencing those commitments.
+
+The repo includes a BAS-compatible payload builder that reads on-chain commitment state and emits deterministic claim bytes:
+
+```bash
+npm run bas:build -- \
+  --contract <CLAWCOMMIT_ADDRESS> \
+  --commit-id <COMMIT_ID> \
+  --reveal-tx <REVEAL_TX_HASH> \
+  --network bscTestnet \
+  --schema-uid <BAS_SCHEMA_UID> \
+  --metadata-uri "ipfs://<CID>" \
+  --out deployment-proof/bas-attestation.json
+```
+
+Output includes:
+- `claimDigest` (hash of encoded claim bytes)
+- structured claim fields (commitment hash, commitId, reveal tx hash, model version, replay status)
+- `attestationRequest.data` ready for BAS submission tooling
+
+See: `integrations/bas/README.md`
 
 ### 4. Replay Validator (Standalone)
 
@@ -568,6 +595,7 @@ For MCP server setup, env configuration, testnet faucet steps, and terminal veri
 
 - `/Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server/README.md`
 - `/Users/luigiarmogida/Documents/projects/ClawCommit/integrations/mcp-server/QUICKSTART.md`
+- `/Users/luigiarmogida/Documents/projects/ClawCommit/integrations/bas/README.md`
 
 ## Repo Layout
 
@@ -577,6 +605,7 @@ For MCP server setup, env configuration, testnet faucet steps, and terminal veri
 - `scripts/commit.ts` - commit CLI
 - `scripts/reveal.ts` - reveal CLI
 - `scripts/replay.ts` - standalone replay validator (`ts-node`)
+- `scripts/integration/buildBasAttestation.ts` - BAS-compatible attestation payload builder
 - `scripts/batch/build.ts` - NDJSON to manifest/tree builder
 - `scripts/batch/recomputeRoot.ts` - deterministic root recomputation
 - `scripts/batch/commitBatch.ts` - batch root commit script

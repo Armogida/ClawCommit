@@ -205,6 +205,34 @@ node openclaw/openclaw.js \
 
 ---
 
+### 7. BNB Attestation Service Compatibility (`bas/`)
+
+**Purpose**: Layer structured BAS-compatible attestations on top of ClawCommit commitments.
+
+**Use Case**: After a ClawCommit reveal is verified, generate a portable attestation payload for
+BAS schema-based claims such as `AI_DECISION_VERIFIED`.
+
+**Key Features**:
+- Deterministic claim encoding tied to `commitId`, commitment hash, and reveal tx hash
+- On-chain cross-check of `getCommitment` + `verifyReplay` before payload generation
+- BAS-ready `attestationRequest.data` output without hardcoding BAS contract ABIs
+
+**Quick Start**:
+```bash
+cd ..
+npm run bas:build -- \
+  --contract <CLAWCOMMIT_ADDRESS> \
+  --commit-id <COMMIT_ID> \
+  --reveal-tx <REVEAL_TX_HASH> \
+  --network bscTestnet \
+  --schema-uid <BAS_SCHEMA_UID> \
+  --out deployment-proof/bas-attestation.json
+```
+
+**Documentation**: [bas/README.md](./bas/README.md)
+
+---
+
 ## Integration Comparison
 
 | Feature | GitHub Copilot | MCP Server | GitHub Action | TypeScript SDK | AI Schemas |

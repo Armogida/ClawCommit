@@ -52,6 +52,16 @@ Commit hash matches reveal.
 - Reduced gas overhead for high-frequency autonomous agents.
 - Optional batch reveal flows for operational efficiency.
 - Additional indexing and analytics over batch commitments.
+- BAS attestation issuance for schema-based governance/compliance claims that reference verified commitments.
+
+## BAS Compatibility (Implemented)
+
+ClawCommit now includes a BAS-compatible attestation payload builder (`npm run bas:build`) that:
+- validates reveal transaction + commitment linkage onchain,
+- checks replay verification status,
+- emits deterministic encoded claim data for BAS schemas (for example `AI_DECISION_VERIFIED_V1`).
+
+This keeps ClawCommit as the integrity primitive and layers BAS as a structured attestation surface.
 
 ## Submission Criteria Compliance
 
