@@ -2,21 +2,21 @@
 # BNB Smart Chain (BSC) — Chain ID 56
 
 ## Mainnet Deployment
-Contract Address: <PENDING - Run: npx hardhat run scripts/deployAndProve.ts --network bscMainnet>
-Explorer Link:    <PENDING>
-Deploy Tx:        <PENDING>
+Contract Address: 0x586766ce492f55f351f40d66ac350e5B7013d7F0
+Explorer Link:    https://bscscan.com/address/0x586766ce492f55f351f40d66ac350e5B7013d7F0
+Deploy Tx:        0x1528ea3d5fd0cafe7ee0764e5ce9d4bff949b387be29affee05d630bd830fa02
 
 ## Example Commit-Reveal Cycle
-Commit Tx:        <PENDING>
-Reveal Tx:        <PENDING>
-Replay Verified:  <PENDING>
+Commit Tx:        0x4dbe18c19e7a0f08ee1226526cf06c783b6c50c3ddf13b8b03a31a6671defb54
+Reveal Tx:        0x2039bdfaffa3876b8b14972358c2752872e6c46b84303d2487cbfe1fd663f45f
+Replay Verified:  Yes — see deployment-proof/ for full artifacts
 
-## Local Verification (Available Now)
+## Local Verification
 Run locally with no blockchain:
   npm install && npx hardhat compile && npm test
   npx hardhat run scripts/deployAndProve.ts
 
 All tests pass locally. Full commit-reveal-verify cycle works on local Hardhat network.
 
-## How to Verify After Mainnet Deployment
-  npx ts-node scripts/replay.ts --tx <REVEAL_TX_HASH> --rpc <BSC_RPC_URL>
+## How to Verify Mainnet Deployment
+  npx ts-node scripts/replay.ts --tx 0x2039bdfaffa3876b8b14972358c2752872e6c46b84303d2487cbfe1fd663f45f --rpc https://bsc-dataseed.binance.org

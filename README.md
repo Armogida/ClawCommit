@@ -655,10 +655,13 @@ Validator steps:
 ## Hackathon Submission Compliance
 
 ### Onchain Proof
-- **Contract Address**: See `bsc.address` for deployed address
+- **Contract Address**: `0x586766ce492f55f351f40d66ac350e5B7013d7F0`
 - **Network**: BNB Smart Chain (BSC) Mainnet — Chain ID 56
-- **Explorer**: https://bscscan.com/address/[CONTRACT_ADDRESS]
-- **Proof Artifacts**: See `deployment-proof/` directory for deploy, commit, and reveal transaction hashes
+- **Explorer**: https://bscscan.com/address/0x586766ce492f55f351f40d66ac350e5B7013d7F0
+- **Deploy Tx**: [`0x1528ea3d...830fa02`](https://bscscan.com/tx/0x1528ea3d5fd0cafe7ee0764e5ce9d4bff949b387be29affee05d630bd830fa02)
+- **Commit Tx**: [`0x4dbe18c1...1defb54`](https://bscscan.com/tx/0x4dbe18c19e7a0f08ee1226526cf06c783b6c50c3ddf13b8b03a31a6671defb54)
+- **Reveal Tx**: [`0x2039bdfa...63f45f`](https://bscscan.com/tx/0x2039bdfaffa3876b8b14972358c2752872e6c46b84303d2487cbfe1fd663f45f)
+- **Proof Artifacts**: See `deployment-proof/` directory for full details
 
 ### Reproducibility
 - **Public Repository**: https://github.com/Armogida/ClawCommit
